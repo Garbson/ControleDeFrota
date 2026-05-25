@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ControleFrota — Gestão de Frota</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+*{font-family:'Inter',sans-serif;box-sizing:border-box;}
+body{margin:0;overflow:hidden;background:#f0f4f8;}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:#0d1117;}
+::-webkit-scrollbar-thumb{background:#2d3748;border-radius:5px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;cursor:pointer;transition:all 0.2s;color:#94a3b8;font-size:13px;font-weight:500;margin:1px 8px;border-left:3px solid transparent;}
+.nav-item:hover{background:rgba(37,99,235,0.12);color:#c7d2fe;}
+.nav-item.active{background:rgba(37,99,235,0.22);color:#fff;border-left-color:#2563eb;}
+.kpi{background:white;border-radius:12px;padding:20px 22px;transition:transform 0.2s,box-shadow 0.2s;border:1px solid #e2e8f0;}
+.kpi:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,0.09);}
+.sbtn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.18s;border:1px solid #e2e8f0;background:white;color:#64748b;}
+.sbtn:hover{border-color:#2563eb;color:#2563eb;}
+.sbtn.on{background:#2563eb;color:white;border-color:#2563eb;}
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:9999px;font-size:11px;font-weight:600;}
+.th{padding:9px 18px;text-align:left;font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;background:#f8fafc;border-bottom:1px solid #e2e8f0;}
+.td{padding:11px 18px;font-size:13px;color:#334155;border-bottom:1px solid #f1f5f9;}
+.finput{width:100%;padding:9px 13px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;transition:border-color .2s;background:white;}
+.finput:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.finput:disabled{background:#f8fafc;color:#94a3b8;}
+.pbg{height:7px;border-radius:4px;background:#e2e8f0;overflow:hidden;}
+.pfill{height:100%;border-radius:4px;transition:width .6s ease;}
+.btn-p{padding:10px 22px;background:#2563eb;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:7px;}
+.btn-p:hover{background:#1d4ed8;}
+.btn-p:disabled{background:#94a3b8;cursor:not-allowed;}
+.slide-p{position:fixed;right:0;top:0;bottom:0;width:420px;background:white;box-shadow:-10px 0 40px rgba(0,0,0,.18);z-index:60;overflow-y:auto;animation:sIn .3s ease;}
+@keyframes sIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.toast{position:fixed;bottom:24px;right:24px;background:#10b981;color:white;padding:13px 20px;border-radius:10px;font-weight:600;z-index:200;box-shadow:0 8px 25px rgba(16,185,129,.35);animation:tIn .3s ease;}
+@keyframes tIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:100;}
+.pulse-dot{width:7px;height:7px;background:#22c55e;border-radius:50%;display:inline-block;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+tr.trow:hover td{background:#f8fafc;}
+.cat-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600;}
+</style>
+</head>
+<body>
+<div id="app" style="display:flex;height:100vh;overflow:hidden;">
+
+<!-- ===================== SIDEBAR ===================== -->
+<aside style="width:232px;background:#1a1f2e;flex-shrink:0;display:flex;flex-direction:column;overflow:hidden;">
+  <div style="padding:18px 18px 14px;border-bottom:1px solid rgba(255,255,255,.06);">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:37px;height:37px;background:linear-gradient(135deg,#2563eb,#1e40af);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg width="20" height="20" fill="white" viewBox="0 0 24 24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+      </div>
+      <div>
+        <div style="color:white;font-weight:800;font-size:14px;letter-spacing:-.3px;">ControleFrota</div>
+        <div style="color:#475569;font-size:10px;font-weight:600;letter-spacing:.04em;">GESTÃO DE FROTA</div>
+      </div>
+    </div>
+  </div>
+
+  <nav style="flex:1;padding:10px 0;overflow-y:auto;">
+    <div style="padding:8px 18px 6px;font-size:10px;font-weight:700;color:#334155;letter-spacing:.08em;text-transform:uppercase;">Principal</div>
+    <div class="nav-item" :class="{active:view==='dashboard'}" @click="view='dashboard'">
+      <svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg> Dashboard
+    </div>
+    <div class="nav-item" :class="{active:view==='drivers'}" @click="view='drivers'">
+      <svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg> Motoristas
+    </div>
+    <div class="nav-item" :class="{active:view==='stock'}" @click="view='stock'">
+      <svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M20 7h-4V5c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm-10-2h4v2h-4V5zm10 14H4V9h16v10z"/></svg> Estoque de Pneus
+    </div>
+    <div class="nav-item" :class="{active:view==='expense'}" @click="view='expense'">
+      <svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg> Lançar Despesa
+    </div>
+    <div style="height:1px;background:rgba(255,255,255,.06);margin:10px 12px;"></div>
+    <div style="padding:8px 18px 6px;font-size:10px;font-weight:700;color:#334155;letter-spacing:.08em;text-transform:uppercase;">Relatórios</div>
+    <div class="nav-item" :class="{active:view==='analytics'}" @click="view='analytics'">
+      <svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg> Análise de Gastos
+    </div>
+    <div class="nav-item" :class="{active:view==='nfs'}" @click="view='nfs'">
+      <svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg> Notas Fiscais
+    </div>
+  </nav>
+
+  <div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.06);">
+    <div style="display:flex;align-items:center;gap:9px;">
+      <div style="width:31px;height:31px;background:linear-gradient(135deg,#7c3aed,#5b21b6);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;">A</div>
+      <div>
+        <div style="color:#e2e8f0;font-size:12px;font-weight:600;">Administrador</div>
+        <div style="color:#475569;font-size:10px;">admin@empresa.com.br</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ===================== MAIN ===================== -->
+<main style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+
+  <!-- TOP BAR -->
+  <div style="background:white;padding:13px 26px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+    <div>
+      <h1 style="margin:0;font-size:17px;font-weight:800;color:#0f172a;">{{pageTitle}}</h1>
+      <p style="margin:0;font-size:11.5px;color:#94a3b8;margin-top:1px;">{{pageSubtitle}}</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;padding:5px 13px;font-size:12px;font-weight:600;color:#15803d;display:flex;align-items:center;gap:6px;">
+        <span class="pulse-dot"></span> Sistema Online
+      </div>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:5px 13px;font-size:12px;color:#64748b;font-weight:500;">
+        📅 25/05/2026
+      </div>
+      <div @click="view='expense'" style="background:#2563eb;border-radius:7px;padding:5px 13px;font-size:12px;color:white;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+        <svg width="13" height="13" fill="white" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg> Novo Lançamento
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div style="flex:1;overflow-y:auto;padding:22px 26px;" id="main-scroll">
+
+    <!-- ==================== DASHBOARD ==================== -->
+    <div v-if="view==='dashboard'">
+
+      <!-- KPI Cards -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;">
+        <div class="kpi" style="border-top:3px solid #2563eb;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Motoristas Ativos</div>
+              <div style="font-size:34px;font-weight:800;color:#0f172a;margin-top:6px;line-height:1;">13</div>
+              <div style="font-size:11.5px;color:#22c55e;margin-top:5px;display:flex;align-items:center;gap:4px;font-weight:600;">
+                <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z"/></svg> Todos operacionais
+              </div>
+            </div>
+            <div style="width:42px;height:42px;background:rgba(37,99,235,.1);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+              <svg width="21" height="21" fill="#2563eb" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="kpi" style="border-top:3px solid #f59e0b;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Pneus Distribuídos</div>
+              <div style="font-size:34px;font-weight:800;color:#0f172a;margin-top:6px;line-height:1;">139</div>
+              <div style="font-size:11.5px;color:#f59e0b;margin-top:5px;font-weight:600;">Total no período 2025–2026</div>
+            </div>
+            <div style="width:42px;height:42px;background:rgba(245,158,11,.1);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+              <svg width="21" height="21" fill="#f59e0b" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="kpi" style="border-top:3px solid #10b981;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Em Estoque Agora</div>
+              <div style="font-size:34px;font-weight:800;color:#0f172a;margin-top:6px;line-height:1;">55</div>
+              <div style="font-size:11.5px;color:#10b981;margin-top:5px;font-weight:600;display:flex;align-items:center;gap:3px;">
+                <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Nível adequado
+              </div>
+            </div>
+            <div style="width:42px;height:42px;background:rgba(16,185,129,.1);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+              <svg width="21" height="21" fill="#10b981" viewBox="0 0 24 24"><path d="M20 7h-4V5c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm-10-2h4v2h-4V5zm10 14H4V9h16v10z"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="kpi" style="border-top:3px solid #7c3aed;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Investimento em Pneus</div>
+              <div style="font-size:26px;font-weight:800;color:#0f172a;margin-top:6px;line-height:1.1;">R$ 79.730</div>
+              <div style="font-size:11.5px;color:#7c3aed;margin-top:5px;font-weight:600;">3 NFs com valor registrado</div>
+            </div>
+            <div style="width:42px;height:42px;background:rgba(124,58,237,.1);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+              <svg width="21" height="21" fill="#7c3aed" viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart + Ranking -->
+      <div style="display:grid;grid-template-columns:1fr 340px;gap:14px;margin-bottom:20px;">
+        <div style="background:white;border-radius:12px;padding:22px;border:1px solid #e2e8f0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div>
+              <h3 style="margin:0;font-size:14px;font-weight:700;color:#0f172a;">Consumo de Pneus por Motorista</h3>
+              <p style="margin:0;font-size:11.5px;color:#94a3b8;margin-top:2px;">Total distribuído no período</p>
+            </div>
+            <div style="display:flex;gap:5px;">
+              <button class="sbtn" :class="{on:chartOrder==='desc'}" @click="setChartOrder('desc')">↓ Maior</button>
+              <button class="sbtn" :class="{on:chartOrder==='asc'}" @click="setChartOrder('asc')">↑ Menor</button>
+              <button class="sbtn" :class="{on:chartOrder==='name'}" @click="setChartOrder('name')">A–Z</button>
+            </div>
+          </div>
+          <canvas ref="chartCanvas" style="max-height:260px;"></canvas>
+        </div>
+
+        <div style="background:white;border-radius:12px;padding:22px;border:1px solid #e2e8f0;display:flex;flex-direction:column;">
+          <h3 style="margin:0 0 14px;font-size:14px;font-weight:700;color:#0f172a;">Ranking de Consumo</h3>
+          <div v-for="(d,i) in topDrivers" :key="d.id" style="margin-bottom:13px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div :style="`width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;background:${i===0?'#f59e0b':i===1?'#94a3b8':i===2?'#d97706':'#f1f5f9'};color:${i<3?'white':'#64748b'};`">{{i+1}}</div>
+                <div>
+                  <div style="font-size:12.5px;font-weight:600;color:#334155;line-height:1.2;">{{d.name}}</div>
+                  <div style="font-size:10px;font-family:monospace;font-weight:700;color:#2563eb;background:#dbeafe;padding:1px 6px;border-radius:4px;display:inline-block;margin-top:2px;">{{d.truck || d.trailer}}</div>
+                </div>
+              </div>
+              <span style="font-size:13px;font-weight:800;color:#0f172a;">{{d.tires}}</span>
+            </div>
+            <div class="pbg">
+              <div class="pfill" :style="`width:${(d.tires/24)*100}%;background:${i===0?'#f59e0b':i===1?'#2563eb':i===2?'#10b981':'#94a3b8'}`"></div>
+            </div>
+          </div>
+          <div style="margin-top:auto;padding-top:12px;border-top:1px solid #f1f5f9;font-size:11.5px;color:#94a3b8;text-align:center;">
+            Máx. registrado: <strong style="color:#f59e0b;">MATHEUS — 24 pneus</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Movements -->
+      <div style="background:white;border-radius:12px;border:1px solid #e2e8f0;">
+        <div style="padding:18px 22px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;font-size:14px;font-weight:700;color:#0f172a;">Últimas Movimentações</h3>
+          <div style="display:flex;gap:5px;">
+            <button class="sbtn" :class="{on:mvFilter==='all'}" @click="mvFilter='all'">Todas</button>
+            <button class="sbtn" :class="{on:mvFilter==='entrada'}" @click="mvFilter='entrada'">↓ Entradas</button>
+            <button class="sbtn" :class="{on:mvFilter==='saida'}" @click="mvFilter='saida'">↑ Saídas</button>
+          </div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr>
+            <th class="th">Data</th><th class="th">Tipo</th><th class="th">Motorista</th><th class="th">Item</th><th class="th">Qtd</th><th class="th">Valor</th><th class="th">Status</th>
+          </tr></thead>
+          <tbody>
+            <tr class="trow" v-for="m in filteredMovements" :key="m.id" style="cursor:default;">
+              <td class="td" style="font-weight:500;white-space:nowrap;">{{m.date}}</td>
+              <td class="td">
+                <span class="badge" :style="m.type==='entrada'?'background:#dcfce7;color:#16a34a;':'background:#fff7ed;color:#c2410c;'">{{m.type==='entrada'?'↓ Entrada':'↑ Saída'}}</span>
+              </td>
+              <td class="td">
+                <div style="font-weight:600;color:#0f172a;font-size:12.5px;">{{m.driver}}</div>
+                <div style="font-size:10.5px;color:#94a3b8;">{{m.vehicle}}</div>
+              </td>
+              <td class="td" style="font-size:12.5px;">{{m.item}}</td>
+              <td class="td" style="font-weight:700;color:#0f172a;">{{m.qty}}</td>
+              <td class="td" style="font-weight:700;color:#0f172a;white-space:nowrap;">{{m.value}}</td>
+              <td class="td"><span class="badge" style="background:#dbeafe;color:#1d4ed8;">Registrado</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ==================== MOTORISTAS ==================== -->
+    <div v-else-if="view==='drivers'">
+      <!-- Filter bar -->
+      <div style="background:white;border-radius:11px;padding:14px 18px;border:1px solid #e2e8f0;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span style="font-size:12px;font-weight:700;color:#64748b;">ORDENAR:</span>
+          <button class="sbtn" :class="{on:dSort==='tires-desc'}" @click="dSort='tires-desc'">↓ Mais pneus</button>
+          <button class="sbtn" :class="{on:dSort==='tires-asc'}" @click="dSort='tires-asc'">↑ Menos pneus</button>
+          <button class="sbtn" :class="{on:dSort==='name'}" @click="dSort='name'">A–Z Nome</button>
+          <div style="width:1px;height:20px;background:#e2e8f0;"></div>
+          <span style="font-size:12px;font-weight:700;color:#64748b;">FILTRAR:</span>
+          <button class="sbtn" :class="{on:dFilter==='all'}" @click="dFilter='all'">Todos</button>
+          <button class="sbtn" :class="{on:dFilter==='carreta'}" @click="dFilter='carreta'">Carreta</button>
+          <button class="sbtn" :class="{on:dFilter==='frigorifico'}" @click="dFilter='frigorifico'">Frigorífica</button>
+          <button class="sbtn" :class="{on:dFilter==='daf'}" @click="dFilter='daf'">DAF</button>
+        </div>
+        <div style="font-size:12.5px;color:#94a3b8;">
+          <strong style="color:#0f172a;">{{sortedDrivers.length}}</strong> motoristas &nbsp;·&nbsp; <strong style="color:#0f172a;">139</strong> pneus distribuídos
+        </div>
+      </div>
+
+      <!-- Driver table -->
+      <div style="background:white;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 80px 1fr 110px;gap:8px;padding:10px 18px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Motorista</div>
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Cavalo</div>
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Carreta / Reboque</div>
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Pneus</div>
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Consumo relativo</div>
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Status</div>
+        </div>
+        <div v-for="d in sortedDrivers" :key="d.id"
+          @click="selectDriver(d)"
+          style="display:grid;grid-template-columns:2fr 1fr 1fr 80px 1fr 110px;gap:8px;padding:13px 18px;border-bottom:1px solid #f1f5f9;align-items:center;cursor:pointer;transition:background .15s;"
+          @mouseover="$event.currentTarget.style.background='#f8fafc'" @mouseleave="$event.currentTarget.style.background='white'">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div :style="`width:35px;height:35px;border-radius:50%;background:${d.color}22;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:${d.color};flex-shrink:0;`">{{d.name[0]}}</div>
+            <div>
+              <div style="font-weight:700;color:#0f172a;font-size:13.5px;">{{d.name}}</div>
+              <div style="font-size:10.5px;color:#94a3b8;">{{d.trailerType}}</div>
+            </div>
+          </div>
+          <div><span v-if="d.truck" style="font-family:monospace;font-size:12px;font-weight:700;color:#1e40af;background:#dbeafe;padding:3px 8px;border-radius:5px;">{{d.truck}}</span><span v-else style="color:#94a3b8;font-size:12px;">—</span></div>
+          <div><span v-if="d.trailer" style="font-family:monospace;font-size:12px;font-weight:700;color:#5b21b6;background:#ede9fe;padding:3px 8px;border-radius:5px;">{{d.trailer}}</span><span v-else style="color:#94a3b8;font-size:12px;">—</span></div>
+          <div style="font-size:24px;font-weight:800;color:#0f172a;">{{d.tires}}</div>
+          <div style="padding-right:12px;">
+            <div class="pbg">
+              <div class="pfill" :style="`width:${Math.min((d.tires/24)*100,100)}%;background:${d.tires>=20?'#ef4444':d.tires>=12?'#f59e0b':'#10b981'}`"></div>
+            </div>
+            <div style="font-size:10px;color:#94a3b8;margin-top:3px;">{{Math.round((d.tires/24)*100)}}% do máximo</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;">
+            <span class="badge" style="background:#dcfce7;color:#16a34a;">● Ativo</span>
+            <svg width="15" height="15" fill="#94a3b8" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== ESTOQUE ==================== -->
+    <div v-else-if="view==='stock'">
+      <!-- KPIs -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;">
+        <div class="kpi" style="border-top:3px solid #10b981;">
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Total em Estoque</div>
+          <div style="font-size:34px;font-weight:800;color:#0f172a;margin-top:6px;">55</div>
+          <div style="font-size:11.5px;color:#10b981;font-weight:600;">pneus disponíveis</div>
+        </div>
+        <div class="kpi" style="border-top:3px solid #2563eb;">
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Novos</div>
+          <div style="font-size:34px;font-weight:800;color:#0f172a;margin-top:6px;">48</div>
+          <div style="font-size:11.5px;color:#2563eb;font-weight:600;">pneus novos</div>
+        </div>
+        <div class="kpi" style="border-top:3px solid #f59e0b;">
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Recapados</div>
+          <div style="font-size:34px;font-weight:800;color:#0f172a;margin-top:6px;">7</div>
+          <div style="font-size:11.5px;color:#f59e0b;font-weight:600;">pneus recapados</div>
+        </div>
+        <div class="kpi" style="border-top:3px solid #7c3aed;">
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Valor Investido</div>
+          <div style="font-size:26px;font-weight:800;color:#0f172a;margin-top:6px;">R$ 79.730</div>
+          <div style="font-size:11.5px;color:#7c3aed;font-weight:600;">5 notas fiscais</div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div style="background:white;border-radius:11px;padding:13px 18px;border:1px solid #e2e8f0;margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <span style="font-size:12px;font-weight:700;color:#64748b;">FILTRAR:</span>
+        <button class="sbtn" :class="{on:sFilter==='all'}" @click="sFilter='all'">Todos</button>
+        <button class="sbtn" :class="{on:sFilter==='novo'}" @click="sFilter='novo'">Novos</button>
+        <button class="sbtn" :class="{on:sFilter==='recapado'}" @click="sFilter='recapado'">Recapados</button>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+          <span style="font-size:12px;font-weight:700;color:#64748b;">ORDENAR:</span>
+          <button class="sbtn" :class="{on:sSort==='qty-desc'}" @click="sSort='qty-desc'">↓ Maior qtd</button>
+          <button class="sbtn" :class="{on:sSort==='qty-asc'}" @click="sSort='qty-asc'">↑ Menor qtd</button>
+          <button class="sbtn" :class="{on:sSort==='date'}" @click="sSort='date'">Data</button>
+        </div>
+      </div>
+
+      <!-- Stock table -->
+      <div style="background:white;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;margin-bottom:20px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr>
+            <th class="th">Pneu / Marca</th><th class="th">Tipo</th><th class="th">Qtd</th><th class="th">Nível</th><th class="th">NF Origem</th><th class="th">Entrada</th><th class="th" style="text-align:center;">Ação</th>
+          </tr></thead>
+          <tbody>
+            <tr class="trow" v-for="s in filteredStock" :key="s.id">
+              <td class="td">
+                <div style="font-weight:700;color:#0f172a;font-size:13px;">{{s.type}}</div>
+                <div v-if="s.details" style="font-size:10.5px;color:#94a3b8;margin-top:1px;">{{s.details}}</div>
+              </td>
+              <td class="td">
+                <span class="badge" :style="s.status==='novo'?'background:#dbeafe;color:#1d4ed8;':'background:#fef3c7;color:#b45309;'">{{s.status==='novo'?'Novo':'Recapado'}}</span>
+              </td>
+              <td class="td"><span style="font-size:22px;font-weight:800;color:#0f172a;">{{s.qty}}</span><span style="font-size:11px;color:#94a3b8;"> un</span></td>
+              <td class="td" style="min-width:110px;">
+                <div class="pbg">
+                  <div class="pfill" :style="`width:${Math.min((s.qty/25)*100,100)}%;background:${s.qty<=3?'#ef4444':s.qty<=8?'#f59e0b':'#10b981'}`"></div>
+                </div>
+                <div style="font-size:10px;margin-top:3px;" :style="`color:${s.qty<=3?'#ef4444':s.qty<=8?'#f59e0b':'#10b981'}`">{{s.qty<=3?'⚠ Crítico':s.qty<=8?'Atenção':'OK'}}</div>
+              </td>
+              <td class="td"><span style="font-family:monospace;font-size:11.5px;background:#f1f5f9;padding:3px 8px;border-radius:5px;color:#475569;font-weight:700;">NF {{s.nf}}</span></td>
+              <td class="td" style="color:#64748b;font-size:12px;">{{s.date}}</td>
+              <td class="td" style="text-align:center;">
+                <button @click="openExit(s)" class="btn-p" style="padding:6px 13px;font-size:12px;">Registrar Saída</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- NF Table -->
+      <div style="background:white;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+        <div style="padding:17px 22px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+          <h3 style="margin:0;font-size:14px;font-weight:700;color:#0f172a;">Notas Fiscais de Entrada</h3>
+          <span style="font-size:12px;color:#94a3b8;">Compras de estoque</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr>
+            <th class="th">NF</th><th class="th">Descrição</th><th class="th">Quantidade</th><th class="th">Valor Total</th><th class="th">Preço Unit.</th><th class="th">Data</th><th class="th">Status</th>
+          </tr></thead>
+          <tbody>
+            <tr class="trow" v-for="p in purchases" :key="p.nf">
+              <td class="td"><span style="font-family:monospace;font-weight:800;color:#1e40af;font-size:13px;">NF {{p.nf}}</span></td>
+              <td class="td" style="font-weight:600;">{{p.description}}</td>
+              <td class="td"><strong>{{p.qty}}</strong> pneus</td>
+              <td class="td" style="font-weight:800;color:#0f172a;">{{p.value}}</td>
+              <td class="td" style="color:#64748b;">{{p.unitPrice}}</td>
+              <td class="td" style="color:#64748b;">{{p.date}}</td>
+              <td class="td"><span class="badge" style="background:#dcfce7;color:#16a34a;">✓ Processada</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ==================== LANÇAR DESPESA ==================== -->
+    <div v-else-if="view==='expense'">
+      <div style="max-width:700px;">
+        <div style="background:white;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+          <div style="padding:20px 24px;background:linear-gradient(135deg,#1a1f2e,#1e293b);border-bottom:1px solid #0f172a;">
+            <h3 style="margin:0;font-size:15px;font-weight:700;color:white;">📋 Novo Lançamento de Despesa</h3>
+            <p style="margin:5px 0 0;font-size:12px;color:#94a3b8;">Registre despesas por motorista e veículo</p>
+          </div>
+          <div style="padding:28px 30px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Motorista *</label>
+                <select v-model="form.driver" @change="form.vehicle=''" class="finput">
+                  <option value="">Selecione o motorista...</option>
+                  <option v-for="d in drivers" :key="d.id" :value="d.name">{{d.name}}</option>
+                </select>
+              </div>
+
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Veículo / Placa *</label>
+                <select v-model="form.vehicle" class="finput" :disabled="!form.driver">
+                  <option value="">Selecione o veículo...</option>
+                  <template v-if="formDriver">
+                    <option v-if="formDriver.truck" :value="formDriver.truck">Cavalo — {{formDriver.truck}}</option>
+                    <option v-if="formDriver.trailer" :value="formDriver.trailer">{{formDriver.trailerType}} — {{formDriver.trailer}}</option>
+                  </template>
+                </select>
+              </div>
+
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Tipo de Despesa *</label>
+                <select v-model="form.type" class="finput">
+                  <option value="">Selecione...</option>
+                  <option value="pneu">🔄 Pneu</option>
+                  <option value="combustivel">⛽ Combustível</option>
+                  <option value="manutencao">🔧 Manutenção</option>
+                  <option value="pedagio">🛣️ Pedágio</option>
+                  <option value="outros">📋 Outros</option>
+                </select>
+              </div>
+
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Quantidade {{form.type!=='pneu'?'(apenas pneus)':''}}</label>
+                <input v-model="form.qty" type="number" min="1" placeholder="1" class="finput" :disabled="form.type!=='pneu'"/>
+              </div>
+
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Valor (R$) *</label>
+                <input v-model="form.value" type="number" step="0.01" placeholder="0,00" class="finput"/>
+              </div>
+
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Data *</label>
+                <input v-model="form.date" type="date" class="finput"/>
+              </div>
+
+              <div v-if="form.type==='pneu'" style="grid-column:1/-1;">
+                <label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Marca / Tipo do Pneu</label>
+                <input v-model="form.tireBrand" placeholder="Ex: Continental Liso, Supercargo Borrachudo..." class="finput"/>
+              </div>
+
+              <div v-if="form.type==='manutencao'" style="grid-column:1/-1;">
+                <label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Tipo de Serviço</label>
+                <input v-model="form.service" placeholder="Ex: Troca de óleo, Freios, Suspensão..." class="finput"/>
+              </div>
+
+              <div style="grid-column:1/-1;">
+                <label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Observação</label>
+                <textarea v-model="form.obs" placeholder="Informações adicionais sobre o lançamento..." class="finput" style="min-height:74px;resize:vertical;"></textarea>
+              </div>
+            </div>
+
+            <!-- Form summary -->
+            <div v-if="form.driver && form.type && form.value" style="background:#f8fafc;border-radius:10px;padding:14px 16px;margin-top:18px;border:1px solid #e2e8f0;">
+              <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;">Resumo do Lançamento</div>
+              <div style="display:flex;gap:24px;flex-wrap:wrap;">
+                <div><span style="font-size:11px;color:#94a3b8;">Motorista:</span> <strong style="color:#0f172a;">{{form.driver}}</strong></div>
+                <div><span style="font-size:11px;color:#94a3b8;">Tipo:</span> <strong style="color:#0f172a;">{{expenseTypes[form.type]}}</strong></div>
+                <div v-if="form.value"><span style="font-size:11px;color:#94a3b8;">Valor:</span> <strong style="color:#2563eb;">R$ {{Number(form.value).toLocaleString('pt-BR',{minimumFractionDigits:2})}}</strong></div>
+                <div v-if="form.qty && form.type==='pneu'"><span style="font-size:11px;color:#94a3b8;">Qtd:</span> <strong style="color:#0f172a;">{{form.qty}} pneus</strong></div>
+              </div>
+            </div>
+
+            <div style="margin-top:22px;padding-top:18px;border-top:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
+              <button @click="resetForm" style="padding:9px 18px;background:transparent;border:1px solid #e2e8f0;border-radius:8px;color:#64748b;font-size:13px;font-weight:600;cursor:pointer;">Limpar Formulário</button>
+              <button @click="submitExpense" class="btn-p" :disabled="!formValid">
+                <svg width="15" height="15" fill="white" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                Salvar Lançamento
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== ANÁLISE DE GASTOS ==================== -->
+    <div v-else-if="view==='analytics'">
+      <!-- KPIs analíticos -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;">
+        <div class="kpi" style="border-top:3px solid #ef4444;">
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Maior Consumidor</div>
+          <div style="font-size:18px;font-weight:800;color:#0f172a;margin-top:8px;">MATHEUS</div>
+          <div style="font-size:12px;color:#ef4444;font-weight:600;margin-top:3px;">24 pneus · ≈ R$ 29.900</div>
+        </div>
+        <div class="kpi" style="border-top:3px solid #10b981;">
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Menor Consumidor</div>
+          <div style="font-size:18px;font-weight:800;color:#0f172a;margin-top:8px;">VALDIR</div>
+          <div style="font-size:12px;color:#10b981;font-weight:600;margin-top:3px;">4 pneus · ≈ R$ 4.980</div>
+        </div>
+        <div class="kpi" style="border-top:3px solid #2563eb;">
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Média por Motorista</div>
+          <div style="font-size:34px;font-weight:800;color:#0f172a;margin-top:6px;">12,6</div>
+          <div style="font-size:12px;color:#2563eb;font-weight:600;">pneus em média</div>
+        </div>
+        <div class="kpi" style="border-top:3px solid #f59e0b;">
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Custo Médio/Pneu</div>
+          <div style="font-size:26px;font-weight:800;color:#0f172a;margin-top:6px;">R$ 1.246</div>
+          <div style="font-size:12px;color:#f59e0b;font-weight:600;">com base nas NFs</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
+        <!-- Cost by driver -->
+        <div style="background:white;border-radius:12px;padding:22px;border:1px solid #e2e8f0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div>
+              <h3 style="margin:0;font-size:14px;font-weight:700;color:#0f172a;">Custo Estimado por Motorista</h3>
+              <p style="margin:2px 0 0;font-size:11.5px;color:#94a3b8;">Base: R$ 1.246/pneu (média das NFs)</p>
+            </div>
+            <div style="display:flex;gap:5px;">
+              <button class="sbtn" :class="{on:costSort==='desc'}" @click="costSort='desc'">↓ Maior</button>
+              <button class="sbtn" :class="{on:costSort==='asc'}" @click="costSort='asc'">↑ Menor</button>
+            </div>
+          </div>
+          <div v-for="d in costRanking" :key="d.id" style="margin-bottom:11px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+              <span style="font-size:12.5px;font-weight:600;color:#334155;">{{d.name}}</span>
+              <div style="text-align:right;">
+                <span style="font-size:12.5px;font-weight:800;color:#0f172a;">R$ {{d.cost.toLocaleString('pt-BR')}}</span>
+                <span style="font-size:10px;color:#94a3b8;margin-left:6px;">{{d.tires}} pneus</span>
+              </div>
+            </div>
+            <div class="pbg">
+              <div class="pfill" :style="`width:${(d.tires/24)*100}%;background:${d.tires>=20?'#ef4444':d.tires>=14?'#f59e0b':'#2563eb'}`"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Type breakdown -->
+        <div style="background:white;border-radius:12px;padding:22px;border:1px solid #e2e8f0;">
+          <h3 style="margin:0 0 16px;font-size:14px;font-weight:700;color:#0f172a;">Tipo de Carroceria</h3>
+          <canvas ref="pieCanvas" style="max-height:200px;margin-bottom:16px;"></canvas>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div v-for="t in vehicleTypes" :key="t.label" style="display:flex;align-items:center;gap:8px;background:#f8fafc;border-radius:7px;padding:8px 12px;">
+              <div :style="`width:10px;height:10px;border-radius:50%;background:${t.color};flex-shrink:0;`"></div>
+              <div>
+                <div style="font-size:11px;font-weight:700;color:#0f172a;">{{t.label}}</div>
+                <div style="font-size:10px;color:#94a3b8;">{{t.count}} motoristas</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Insights -->
+      <div style="background:white;border-radius:12px;padding:22px;border:1px solid #e2e8f0;">
+        <h3 style="margin:0 0 16px;font-size:14px;font-weight:700;color:#0f172a;">💡 Insights e Alertas</h3>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+          <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:16px;">
+            <div style="font-size:12px;font-weight:700;color:#c2410c;margin-bottom:6px;">⚠️ Alto Consumo</div>
+            <div style="font-size:13px;font-weight:600;color:#0f172a;">MATHEUS, DANIEL e BEBE</div>
+            <div style="font-size:11.5px;color:#64748b;margin-top:4px;">Esses 3 motoristas consumiram 60 pneus — <strong>43%</strong> do total distribuído. Recomenda-se análise de rota e qualidade das pistas.</div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;">
+            <div style="font-size:12px;font-weight:700;color:#15803d;margin-bottom:6px;">✅ Eficiência</div>
+            <div style="font-size:13px;font-weight:600;color:#0f172a;">VALDIR e LEILSON</div>
+            <div style="font-size:11.5px;color:#64748b;margin-top:4px;">Com apenas 4 e 5 pneus respectivamente, apresentam ótimo aproveitamento. Podem ser referência para avaliação de condução.</div>
+          </div>
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;">
+            <div style="font-size:12px;font-weight:700;color:#1d4ed8;margin-bottom:6px;">📦 Estoque</div>
+            <div style="font-size:13px;font-weight:600;color:#0f172a;">55 pneus disponíveis</div>
+            <div style="font-size:11.5px;color:#64748b;margin-top:4px;">Com consumo médio de ~12 pneus por motorista, o estoque atual cobre aproximadamente <strong>4–5 motoristas</strong>. Reposição recomendada em 30 dias.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== NOTAS FISCAIS ==================== -->
+    <div v-else-if="view==='nfs'">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;">
+        <div class="kpi" style="border-top:3px solid #2563eb;">
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Total de NFs</div>
+          <div style="font-size:34px;font-weight:800;color:#0f172a;margin-top:6px;">5</div>
+        </div>
+        <div class="kpi" style="border-top:3px solid #10b981;">
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Total Pneus Comprados</div>
+          <div style="font-size:34px;font-weight:800;color:#0f172a;margin-top:6px;">79+</div>
+        </div>
+        <div class="kpi" style="border-top:3px solid #7c3aed;">
+          <div style="font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Valor Registrado</div>
+          <div style="font-size:26px;font-weight:800;color:#0f172a;margin-top:6px;">R$ 79.730</div>
+        </div>
+      </div>
+      <div style="background:white;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr>
+            <th class="th">NF</th><th class="th">Fornecedor / Descrição</th><th class="th">Qtd Pneus</th><th class="th">Valor Total</th><th class="th">Preço Unit.</th><th class="th">Data</th><th class="th">Status</th>
+          </tr></thead>
+          <tbody>
+            <tr class="trow" v-for="p in purchases" :key="p.nf">
+              <td class="td"><span style="font-family:monospace;font-weight:800;color:#1e40af;font-size:14px;">NF {{p.nf}}</span></td>
+              <td class="td">
+                <div style="font-weight:700;color:#0f172a;">{{p.description}}</div>
+                <div style="font-size:11px;color:#94a3b8;">{{p.supplier}}</div>
+              </td>
+              <td class="td"><strong style="font-size:16px;">{{p.qty}}</strong> pneus</td>
+              <td class="td" style="font-weight:800;color:#0f172a;font-size:14px;">{{p.value}}</td>
+              <td class="td" style="color:#64748b;">{{p.unitPrice}}</td>
+              <td class="td" style="color:#64748b;">{{p.date}}</td>
+              <td class="td"><span class="badge" style="background:#dcfce7;color:#16a34a;">✓ Processada</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- end content -->
+</main>
+
+<!-- ==================== DRIVER DETAIL PANEL ==================== -->
+<div v-if="selectedDriver" style="position:fixed;inset:0;z-index:50;display:flex;" @click.self="selectedDriver=null">
+  <div @click="selectedDriver=null" style="flex:1;background:rgba(0,0,0,.4);"></div>
+  <div class="slide-p">
+    <!-- Header -->
+    <div :style="`padding:22px;background:${selectedDriver.color};background:linear-gradient(135deg,${selectedDriver.color},${selectedDriver.color}cc);`">
+      <button @click="selectedDriver=null" style="float:right;background:rgba(255,255,255,.2);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;">×</button>
+      <div style="width:50px;height:50px;background:rgba(255,255,255,.25);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:white;margin-bottom:12px;">{{selectedDriver.name[0]}}</div>
+      <div style="color:white;font-size:18px;font-weight:800;">{{selectedDriver.name}}</div>
+      <div style="color:rgba(255,255,255,.75);font-size:12px;margin-top:3px;">{{selectedDriver.trailerType}}</div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <span v-if="selectedDriver.truck" style="background:rgba(255,255,255,.2);color:white;font-family:monospace;font-size:12px;font-weight:700;padding:4px 10px;border-radius:6px;">🚛 {{selectedDriver.truck}}</span>
+        <span v-if="selectedDriver.trailer" style="background:rgba(255,255,255,.2);color:white;font-family:monospace;font-size:12px;font-weight:700;padding:4px 10px;border-radius:6px;">🔗 {{selectedDriver.trailer}}</span>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid #f1f5f9;">
+      <div style="padding:16px 20px;border-right:1px solid #f1f5f9;text-align:center;">
+        <div style="font-size:28px;font-weight:800;color:#0f172a;">{{selectedDriver.tires}}</div>
+        <div style="font-size:11px;color:#94a3b8;font-weight:600;margin-top:2px;">PNEUS RECEBIDOS</div>
+      </div>
+      <div style="padding:16px 20px;text-align:center;">
+        <div style="font-size:28px;font-weight:800;color:#0f172a;">R$ {{(selectedDriver.tires*1246).toLocaleString('pt-BR')}}</div>
+        <div style="font-size:11px;color:#94a3b8;font-weight:600;margin-top:2px;">CUSTO ESTIMADO</div>
+      </div>
+    </div>
+
+    <!-- Tire history -->
+    <div style="padding:20px;">
+      <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px;">Histórico de Pneus</div>
+      <div v-if="selectedDriver.history && selectedDriver.history.length">
+        <div v-for="(h,i) in selectedDriver.history" :key="i"
+          style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f8fafc;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div :style="`width:28px;height:28px;border-radius:7px;background:${selectedDriver.color}22;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:${selectedDriver.color};flex-shrink:0;`">{{h.qty}}</div>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:#0f172a;">{{h.brand}}</div>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
+                <span class="badge" style="font-size:10px;padding:1px 7px;" :style="h.type==='recapado'?'background:#fef3c7;color:#b45309;':'background:#dbeafe;color:#1d4ed8;'">{{h.type}}</span>
+                <span style="font-size:10px;color:#94a3b8;">{{h.date}}</span>
+              </div>
+            </div>
+          </div>
+          <span style="font-size:11px;color:#94a3b8;font-weight:600;">×{{h.qty}}</span>
+        </div>
+      </div>
+      <div v-else style="color:#94a3b8;font-size:13px;text-align:center;padding:20px 0;">Sem histórico registrado</div>
+
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid #f1f5f9;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#0f172a;">
+          <span>Total</span>
+          <span>{{selectedDriver.tires}} pneus</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:16px 20px;border-top:1px solid #f1f5f9;display:flex;gap:8px;">
+      <button @click="view='expense';expPreselect=selectedDriver.name;selectedDriver=null" class="btn-p" style="flex:1;justify-content:center;">
+        + Lançar Despesa
+      </button>
+      <button @click="selectedDriver=null" style="padding:10px 16px;background:#f1f5f9;border:none;border-radius:8px;color:#64748b;font-size:13px;font-weight:600;cursor:pointer;">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== EXIT MODAL ==================== -->
+<div v-if="exitModal" class="modal-bg" @click.self="exitModal=null">
+  <div style="background:white;border-radius:14px;padding:26px;width:420px;box-shadow:0 25px 60px rgba(0,0,0,.25);">
+    <h3 style="margin:0 0 4px;font-size:16px;font-weight:700;color:#0f172a;">Registrar Saída de Pneus</h3>
+    <p style="margin:0 0 20px;font-size:12.5px;color:#64748b;">{{exitModal.type}}</p>
+    <div style="background:#f8fafc;border-radius:9px;padding:14px;margin-bottom:18px;display:flex;gap:20px;">
+      <div><div style="font-size:10px;color:#94a3b8;font-weight:700;margin-bottom:2px;">EM ESTOQUE</div><div style="font-size:22px;font-weight:800;color:#0f172a;">{{exitModal.qty}}</div></div>
+      <div><div style="font-size:10px;color:#94a3b8;font-weight:700;margin-bottom:2px;">NF ORIGEM</div><div style="font-size:14px;font-weight:700;color:#1e40af;font-family:monospace;">NF {{exitModal.nf}}</div></div>
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Motorista *</label>
+      <select v-model="exitForm.driver" class="finput">
+        <option value="">Selecione o motorista...</option>
+        <option v-for="d in drivers" :key="d.id" :value="d.name">{{d.name}}</option>
+      </select>
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Quantidade *</label>
+      <input v-model="exitForm.qty" type="number" min="1" :max="exitModal.qty" :placeholder="`Máx: ${exitModal.qty}`" class="finput"/>
+    </div>
+    <div style="margin-bottom:18px;">
+      <label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Data *</label>
+      <input v-model="exitForm.date" type="date" class="finput"/>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button @click="confirmExit" class="btn-p" style="flex:1;justify-content:center;" :disabled="!exitForm.driver||!exitForm.qty||!exitForm.date">Confirmar Saída</button>
+      <button @click="exitModal=null" style="padding:10px 18px;background:#f1f5f9;border:none;border-radius:8px;color:#64748b;font-size:13px;font-weight:600;cursor:pointer;">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div v-if="toast" class="toast">{{toast}}</div>
+
+</div><!-- end app -->
+
+<script>
+const { createApp, ref, computed, onMounted, watch, nextTick } = Vue;
+
+const DRIVERS = [
+  { id:1,  name:'ANTONIO',          truck:'QWN3F25', trailer:'NAD9G16',   trailerType:'9 Eixos',   tires:8,  color:'#2563eb' },
+  { id:2,  name:'BEBE',             truck:'TAA8A32', trailer:'SQT2A01',   trailerType:'Carreta',   tires:17, color:'#7c3aed' },
+  { id:3,  name:'DANIEL',           truck:'SQS4F03', trailer:'SHA7J53',   trailerType:'Frigorífica',tires:19, color:'#059669' },
+  { id:4,  name:'ELIZEU',           truck:'QWN3A53', trailer:'QLV0365',   trailerType:'Carreta',   tires:14, color:'#d97706' },
+  { id:5,  name:'FLAVIO',           truck:'QWN3A33', trailer:'QWO4F44',   trailerType:'Carreta',   tires:13, color:'#dc2626' },
+  { id:6,  name:'GENILSON',         truck:'SHA6C63', trailer:'NXS1J94',   trailerType:'Frigorífica',tires:12, color:'#0891b2' },
+  { id:7,  name:'SEBASTIÃO',        truck:'SHA9C52', trailer:null,        trailerType:'Cavalo DAF',tires:10, color:'#7c3aed' },
+  { id:8,  name:'MATHEUS',          truck:'QWP1I64', trailer:'SHA4J48',   trailerType:'Caçamba',   tires:24, color:'#f59e0b' },
+  { id:9,  name:'ROMARIO',          truck:'QWO2F67', trailer:null,        trailerType:'Cavalo DAF',tires:13, color:'#10b981' },
+  { id:10, name:'VALDIR',           truck:null,      trailer:'QWP4G94',   trailerType:'Carreta',   tires:4,  color:'#6366f1' },
+  { id:11, name:'LEILSON (Coca Cola)',truck:'DAF7',  trailer:'VANDERLEIA',trailerType:'Carreta',   tires:5,  color:'#ec4899' },
+  { id:12, name:'JOSÉ CHAVES',      truck:'QW02F67', trailer:'QWM0E36',   trailerType:'Carreta',   tires:0,  color:'#64748b' },
+  { id:13, name:'JAILSON',          truck:null,      trailer:'QWM8E36',   trailerType:'4 Eixos',   tires:0,  color:'#94a3b8' },
+];
+
+const TIRE_HISTORY = {
+  1:  [
+    {brand:'Dayton Liso Recapado',qty:3,type:'recapado',date:'Jan/2026'},
+    {brand:'JK Tyre Recapado',    qty:2,type:'recapado',date:'Fev/2026'},
+    {brand:'Recapado',            qty:3,type:'recapado',date:'Mar/2026'},
+  ],
+  2:  [
+    {brand:'Liso Novo',           qty:2,type:'novo',   date:'Nov/2025'},
+    {brand:'Supercargo Liso',     qty:3,type:'novo',   date:'Jan/2026'},
+    {brand:'Robusto Borrachudo',  qty:8,type:'novo',   date:'Fev/2026'},
+    {brand:'Supercargo',          qty:4,type:'novo',   date:'Abr/2026'},
+  ],
+  3:  [
+    {brand:'Advance',             qty:2,type:'novo',   date:'Dez/2025'},
+    {brand:'Recapado',            qty:7,type:'recapado',date:'Jan/2026'},
+    {brand:'Liso',                qty:1,type:'novo',   date:'Fev/2026'},
+    {brand:'Continental Usado',   qty:7,type:'novo',   date:'Mar/2026'},
+    {brand:'Continental',         qty:2,type:'novo',   date:'Mai/2026'},
+  ],
+  4:  [
+    {brand:'Recapado',            qty:3,type:'recapado',date:'Dez/2025'},
+    {brand:'Advance Borrachudo',  qty:4,type:'novo',   date:'Jan/2026'},
+    {brand:'Durable',             qty:1,type:'novo',   date:'Fev/2026'},
+    {brand:'Supercargo',          qty:2,type:'novo',   date:'Mar/2026'},
+    {brand:'Supercargo',          qty:4,type:'novo',   date:'Abr/2026'},
+  ],
+  5:  [
+    {brand:'Winmile',             qty:1,type:'novo',   date:'Dez/2025'},
+    {brand:'Liso',                qty:2,type:'novo',   date:'Jan/2026'},
+    {brand:'Continental Misto',   qty:4,type:'novo',   date:'Fev/2026'},
+    {brand:'Continental',         qty:1,type:'novo',   date:'Mar/2026'},
+    {brand:'Supercargo',          qty:2,type:'novo',   date:'Abr/2026'},
+    {brand:'BTLA',                qty:3,type:'novo',   date:'Mai/2026'},
+  ],
+  6:  [
+    {brand:'Advance',             qty:4,type:'novo',   date:'Dez/2025'},
+    {brand:'Continental',         qty:2,type:'novo',   date:'Jan/2026'},
+    {brand:'Dplus',               qty:2,type:'novo',   date:'Fev/2026'},
+    {brand:'Liso Recapado',       qty:2,type:'recapado',date:'Mar/2026'},
+    {brand:'Continental',         qty:2,type:'novo',   date:'Abr/2026'},
+  ],
+  7:  [
+    {brand:'GTIN',                qty:2,type:'novo',   date:'Jan/2026'},
+    {brand:'Dplus Borrachudo',    qty:4,type:'novo',   date:'Fev/2026'},
+    {brand:'Continental Borrachudo',qty:4,type:'novo', date:'Abr/2026'},
+  ],
+  8:  [
+    {brand:'Continental',         qty:1,type:'novo',   date:'Nov/2025'},
+    {brand:'Liso Recap',          qty:1,type:'recapado',date:'Dez/2025'},
+    {brand:'Golden',              qty:2,type:'novo',   date:'Jan/2026'},
+    {brand:'Supercargo',          qty:4,type:'novo',   date:'Jan/2026'},
+    {brand:'Dplus',               qty:2,type:'novo',   date:'Fev/2026'},
+    {brand:'Dayton',              qty:1,type:'novo',   date:'Fev/2026'},
+    {brand:'Supercargo',          qty:6,type:'novo',   date:'Mar/2026'},
+    {brand:'Dplus',               qty:4,type:'novo',   date:'Abr/2026'},
+    {brand:'Tornado',             qty:2,type:'novo',   date:'Abr/2026'},
+    {brand:'Continental',         qty:1,type:'novo',   date:'Mai/2026'},
+  ],
+  9:  [
+    {brand:'Advance',             qty:3,type:'novo',   date:'Dez/2025'},
+    {brand:'Recapado',            qty:1,type:'recapado',date:'Jan/2026'},
+    {brand:'Supercargo',          qty:6,type:'novo',   date:'Fev/2026'},
+    {brand:'BTLA',                qty:1,type:'novo',   date:'Mar/2026'},
+    {brand:'Continental',         qty:2,type:'novo',   date:'Abr/2026'},
+  ],
+  10: [
+    {brand:'Supercargo Liso',     qty:4,type:'novo',   date:'Mar/2026'},
+  ],
+  11: [
+    {brand:'Supercargo',          qty:2,type:'novo',   date:'Jan/2026'},
+    {brand:'Continental',         qty:2,type:'novo',   date:'Mar/2026'},
+    {brand:'Recapado',            qty:1,type:'recapado',date:'Abr/2026'},
+  ],
+};
+
+const STOCK = [
+  {id:1,type:'Dplus Borrachudo Continental',details:'NF 365 — 4 restantes',status:'novo',    qty:4, nf:'365',    date:'30/12/2025'},
+  {id:2,type:'Liso Continental',            details:'NF 429600',            status:'novo',    qty:20,nf:'429600', date:'30/03/2026'},
+  {id:3,type:'Liso Recapado',               details:'DOT variados',          status:'recapado',qty:7, nf:'41',     date:'Jan/2026'},
+  {id:4,type:'Borrachudo Tornado',          details:'NF 2281',               status:'novo',    qty:2, nf:'2281',   date:'15/04/2026'},
+  {id:5,type:'Misto Pequeno XBRI 175/75',   details:'NF 2249',               status:'novo',    qty:10,nf:'2249',   date:'10/04/2026'},
+  {id:6,type:'Liso Supercargo',             details:'NF 2267',               status:'novo',    qty:11,nf:'2267',   date:'04/05/2026'},
+  {id:7,type:'Liso Vation',                 details:'NF 2265',               status:'novo',    qty:1, nf:'2265',   date:'02/05/2026'},
+];
+
+const PURCHASES = [
+  {nf:'365',   description:'Dplus Borrachudo Continental', supplier:'Continental',qty:20,value:'R$ 27.980,00',unitPrice:'R$ 1.399,00',date:'30/12/2025'},
+  {nf:'1492',  description:'Supercargo Liso',              supplier:'Supercargo', qty:29,value:'R$ 34.500,00',unitPrice:'R$ 1.189,66',date:'19/02/2026'},
+  {nf:'2267',  description:'Supercargo Liso',              supplier:'Supercargo', qty:15,value:'R$ 17.250,00',unitPrice:'R$ 1.150,00',date:'04/05/2026'},
+  {nf:'424807',description:'Continental (pneus)',          supplier:'Continental',qty:'—', value:'A consultar',  unitPrice:'—',        date:'01/01/2026'},
+  {nf:'429600',description:'Continental Liso',             supplier:'Continental',qty:'—', value:'A consultar',  unitPrice:'—',        date:'30/03/2026'},
+];
+
+const MOVEMENTS = [
+  {id:1, date:'24/05/2026',type:'saida',  driver:'MATHEUS',      vehicle:'QWP1I64',  item:'Supercargo Liso',            qty:4,  value:'R$ 4.760,00'},
+  {id:2, date:'22/05/2026',type:'saida',  driver:'DANIEL',       vehicle:'SQS4F03',  item:'Continental Usado',          qty:2,  value:'R$ 2.400,00'},
+  {id:3, date:'04/05/2026',type:'entrada',driver:'—',            vehicle:'Estoque',  item:'Supercargo Liso (NF 2267)',   qty:15, value:'R$ 17.250,00'},
+  {id:4, date:'30/04/2026',type:'saida',  driver:'MATHEUS',      vehicle:'QWP1I64',  item:'Dplus Borrachudo',           qty:4,  value:'R$ 5.596,00'},
+  {id:5, date:'25/04/2026',type:'saida',  driver:'SEBASTIÃO',    vehicle:'SHA9C52',  item:'Continental Borrachudo',     qty:4,  value:'R$ 5.580,00'},
+  {id:6, date:'20/04/2026',type:'saida',  driver:'ELIZEU',       vehicle:'QWN3A53',  item:'Supercargo',                 qty:4,  value:'R$ 4.760,00'},
+  {id:7, date:'15/04/2026',type:'saida',  driver:'ROMARIO',      vehicle:'QWO2F67',  item:'Continental',                qty:2,  value:'R$ 2.790,00'},
+  {id:8, date:'30/03/2026',type:'entrada',driver:'—',            vehicle:'Estoque',  item:'Continental Liso (NF 429600)',qty:20, value:'A consultar'},
+  {id:9, date:'19/02/2026',type:'entrada',driver:'—',            vehicle:'Estoque',  item:'Supercargo Liso (NF 1492)',   qty:29, value:'R$ 34.500,00'},
+  {id:10,date:'10/02/2026',type:'saida',  driver:'BEBE',         vehicle:'TAA8A32',  item:'Robusto Borrachudo',         qty:8,  value:'R$ 9.960,00'},
+];
+
+createApp({
+  setup() {
+    const view         = ref('dashboard');
+    const chartOrder   = ref('desc');
+    const mvFilter     = ref('all');
+    const dSort        = ref('tires-desc');
+    const dFilter      = ref('all');
+    const sFilter      = ref('all');
+    const sSort        = ref('qty-desc');
+    const costSort     = ref('desc');
+    const selectedDriver = ref(null);
+    const exitModal    = ref(null);
+    const toast        = ref('');
+    const expPreselect = ref('');
+    const chartCanvas  = ref(null);
+    const pieCanvas    = ref(null);
+    let chartInst      = null;
+    let pieInst        = null;
+
+    const form = ref({driver:'',vehicle:'',type:'',qty:1,value:'',date:'',tireBrand:'',service:'',obs:''});
+    const exitForm = ref({driver:'',qty:'',date:''});
+
+    const expenseTypes = {pneu:'Pneu',combustivel:'Combustível',manutencao:'Manutenção',pedagio:'Pedágio',outros:'Outros'};
+
+    const drivers = DRIVERS.map(d => ({...d, history: TIRE_HISTORY[d.id] || []}));
+
+    const pageTitle = computed(() => ({
+      dashboard:'Dashboard',drivers:'Motoristas',stock:'Estoque de Pneus',
+      expense:'Lançar Despesa',analytics:'Análise de Gastos',nfs:'Notas Fiscais'
+    }[view.value] || 'ControleFrota'));
+
+    const pageSubtitle = computed(() => ({
+      dashboard:'Visão geral da frota e movimentações recentes',
+      drivers:'Gerenciar motoristas e histórico de consumo',
+      stock:'Controle de pneus em estoque e notas fiscais',
+      expense:'Registrar despesas de pneus, combustível e manutenção',
+      analytics:'Análise comparativa de custos e insights de frota',
+      nfs:'Histórico de compras e notas fiscais de entrada'
+    }[view.value] || ''));
+
+    const topDrivers = computed(() =>
+      [...drivers].filter(d=>d.tires>0).sort((a,b)=>b.tires-a.tires).slice(0,7)
+    );
+
+    const sortedDrivers = computed(() => {
+      let list = [...drivers];
+      if (dFilter.value === 'carreta')     list = list.filter(d => d.trailerType.toLowerCase().includes('carreta'));
+      if (dFilter.value === 'frigorifico') list = list.filter(d => d.trailerType.toLowerCase().includes('frig'));
+      if (dFilter.value === 'daf')         list = list.filter(d => d.trailerType.toLowerCase().includes('daf'));
+      if (dSort.value === 'tires-desc')    list.sort((a,b)=>b.tires-a.tires);
+      else if (dSort.value === 'tires-asc')list.sort((a,b)=>a.tires-b.tires);
+      else                                 list.sort((a,b)=>a.name.localeCompare(b.name));
+      return list;
+    });
+
+    const filteredStock = computed(() => {
+      let list = [...STOCK];
+      if (sFilter.value !== 'all') list = list.filter(s=>s.status===sFilter.value);
+      if (sSort.value === 'qty-desc')  list.sort((a,b)=>b.qty-a.qty);
+      else if (sSort.value === 'qty-asc') list.sort((a,b)=>a.qty-b.qty);
+      return list;
+    });
+
+    const filteredMovements = computed(() => {
+      if (mvFilter.value === 'all') return MOVEMENTS;
+      return MOVEMENTS.filter(m=>m.type===mvFilter.value);
+    });
+
+    const purchases = PURCHASES;
+
+    const costRanking = computed(() => {
+      let list = drivers.filter(d=>d.tires>0).map(d=>({...d, cost: d.tires*1246}));
+      list.sort((a,b)=> costSort.value==='desc' ? b.tires-a.tires : a.tires-b.tires);
+      return list;
+    });
+
+    const vehicleTypes = computed(() => [
+      {label:'Carreta',    color:'#2563eb', count: drivers.filter(d=>d.trailerType.includes('Carreta')||d.trailerType.includes('Eixo')).length},
+      {label:'Frigorífica',color:'#10b981', count: drivers.filter(d=>d.trailerType.includes('Frig')||d.trailerType.includes('frig')).length},
+      {label:'Cavalo DAF', color:'#f59e0b', count: drivers.filter(d=>d.trailerType.includes('DAF')).length},
+      {label:'Caçamba',    color:'#7c3aed', count: drivers.filter(d=>d.trailerType.includes('amba')).length},
+    ]);
+
+    const formDriver = computed(() => drivers.find(d=>d.name===form.value.driver) || null);
+    const formValid  = computed(() => form.value.driver && form.value.vehicle && form.value.type && form.value.value && form.value.date);
+
+    function chartData() {
+      let list = drivers.filter(d=>d.tires>0);
+      if (chartOrder.value === 'desc') list.sort((a,b)=>b.tires-a.tires);
+      else if (chartOrder.value === 'asc') list.sort((a,b)=>a.tires-b.tires);
+      else list.sort((a,b)=>a.name.localeCompare(b.name));
+      return {
+        labels: list.map(d=>d.name),
+        data: list.map(d=>d.tires),
+        colors: list.map(d=>d.color),
+      };
+    }
+
+    function initChart() {
+      if (!chartCanvas.value) return;
+      if (chartInst) { chartInst.destroy(); chartInst = null; }
+      const cd = chartData();
+      chartInst = new Chart(chartCanvas.value.getContext('2d'), {
+        type:'bar',
+        data:{
+          labels: cd.labels,
+          datasets:[{
+            label:'Pneus',
+            data: cd.data,
+            backgroundColor: cd.colors.map(c=>c+'cc'),
+            borderColor: cd.colors,
+            borderWidth:2,
+            borderRadius:6,
+            borderSkipped:false,
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:true,
+          plugins:{
+            legend:{display:false},
+            tooltip:{
+              backgroundColor:'#0f172a',
+              titleColor:'#f8fafc',
+              bodyColor:'#94a3b8',
+              padding:10,
+              callbacks:{label:ctx=>`${ctx.raw} pneus`}
+            }
+          },
+          scales:{
+            y:{
+              beginAtZero:true,
+              grid:{color:'#f1f5f9'},
+              ticks:{color:'#94a3b8',font:{size:11}},
+            },
+            x:{
+              grid:{display:false},
+              ticks:{color:'#64748b',font:{size:11}},
+            }
+          }
+        }
+      });
+    }
+
+    function initPie() {
+      if (!pieCanvas.value) return;
+      if (pieInst) { pieInst.destroy(); pieInst = null; }
+      pieInst = new Chart(pieCanvas.value.getContext('2d'), {
+        type:'doughnut',
+        data:{
+          labels:['Carreta/Eixo','Frigorífica','Cavalo DAF','Caçamba'],
+          datasets:[{
+            data:[7,2,2,1],
+            backgroundColor:['#2563eb','#10b981','#f59e0b','#7c3aed'],
+            borderWidth:2,
+            borderColor:'white',
+          }]
+        },
+        options:{
+          responsive:true,
+          cutout:'65%',
+          plugins:{
+            legend:{display:false},
+            tooltip:{backgroundColor:'#0f172a',titleColor:'#f8fafc',bodyColor:'#94a3b8'}
+          }
+        }
+      });
+    }
+
+    function setChartOrder(o) {
+      chartOrder.value = o;
+      nextTick(initChart);
+    }
+
+    function selectDriver(d) { selectedDriver.value = d; }
+
+    function openExit(s) {
+      exitModal.value = s;
+      exitForm.value = {driver:'',qty:'',date:''};
+    }
+
+    function confirmExit() {
+      showToast(`✅ Saída registrada: ${exitForm.value.qty} pneus para ${exitForm.value.driver}`);
+      exitModal.value = null;
+    }
+
+    function submitExpense() {
+      if (!formValid.value) return;
+      showToast(`✅ Despesa de ${expenseTypes[form.value.type]} salva para ${form.value.driver}`);
+      resetForm();
+    }
+
+    function resetForm() {
+      form.value = {driver:'',vehicle:'',type:'',qty:1,value:'',date:'',tireBrand:'',service:'',obs:''};
+    }
+
+    function showToast(msg) {
+      toast.value = msg;
+      setTimeout(() => toast.value = '', 3500);
+    }
+
+    watch(view, (v) => {
+      if (v === 'dashboard') nextTick(initChart);
+      if (v === 'analytics') nextTick(() => { initPie(); });
+    });
+
+    watch(expPreselect, (v) => { if (v) form.value.driver = v; });
+
+    onMounted(() => nextTick(initChart));
+
+    return {
+      view, pageTitle, pageSubtitle,
+      chartOrder, chartCanvas, pieCanvas,
+      mvFilter, filteredMovements,
+      drivers, sortedDrivers, topDrivers,
+      dSort, dFilter,
+      sFilter, sSort, filteredStock, purchases,
+      costSort, costRanking, vehicleTypes,
+      selectedDriver, selectDriver,
+      exitModal, exitForm, openExit, confirmExit,
+      form, formDriver, formValid, expenseTypes,
+      submitExpense, resetForm,
+      toast, expPreselect,
+      setChartOrder,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
