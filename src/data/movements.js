@@ -1,0 +1,17 @@
+export const movements = [
+  { id: 1, date: '24/05/2026', type: 'saida', driver: 'MATHEUS', vehicle: 'QWP1I64', item: 'Supercargo Liso', qty: 4, value: 'R$ 4.760,00' },
+  { id: 2, date: '22/05/2026', type: 'saida', driver: 'DANIEL', vehicle: 'SQS4F03', item: 'Continental Usado', qty: 2, value: 'R$ 2.400,00' },
+  { id: 3, date: '04/05/2026', type: 'entrada', driver: '—', vehicle: 'Estoque', item: 'Supercargo Liso (NF 2267)', qty: 15, value: 'R$ 17.250,00' },
+  { id: 4, date: '30/04/2026', type: 'saida', driver: 'MATHEUS', vehicle: 'QWP1I64', item: 'Dplus Borrachudo', qty: 4, value: 'R$ 5.596,00' },
+  { id: 5, date: '25/04/2026', type: 'saida', driver: 'SEBASTIÃO', vehicle: 'SHA9C52', item: 'Continental Borrachudo', qty: 4, value: 'R$ 5.580,00' },
+  { id: 6, date: '22/04/2026', type: 'saida', driver: 'DANIEL', vehicle: 'SQS4F03', item: 'Continental Liso', qty: 4, value: 'R$ 4.836,00' },
+  { id: 7, date: '20/04/2026', type: 'saida', driver: 'MATHEUS', vehicle: 'QWP1I64', item: 'Continental Borrachudo', qty: 4, value: 'R$ 4.836,00' },
+  { id: 8, date: '20/04/2026', type: 'entrada', driver: '—', vehicle: 'Estoque', item: 'Dplus Borrachudo (NF 2310)', qty: 20, value: 'R$ 27.960,00' },
+  { id: 9, date: '18/04/2026', type: 'saida', driver: 'FLAVIO', vehicle: 'QWN3A33', item: 'Dplus Borrachudo', qty: 4, value: 'R$ 5.596,00' },
+  { id: 10, date: '15/04/2026', type: 'saida', driver: 'BEBE', vehicle: 'TAA8A32', item: 'Continental Borrachudo', qty: 4, value: 'R$ 4.836,00' },
+  { id: 11, date: '12/04/2026', type: 'saida', driver: 'ELIZEU', vehicle: 'QWN3A53', item: 'Continental Usado', qty: 4, value: 'R$ 2.400,00' },
+  { id: 12, date: '12/04/2026', type: 'saida', driver: 'JOSÉ CHAVES', vehicle: 'QW02F67', item: 'Dplus Borrachudo', qty: 4, value: 'R$ 5.596,00' },
+  { id: 13, date: '10/04/2026', type: 'saida', driver: 'ANTONIO', vehicle: 'QWN3F25', item: 'Supercargo Liso', qty: 4, value: 'R$ 4.600,00' },
+  { id: 14, date: '08/04/2026', type: 'saida', driver: 'DANIEL', vehicle: 'SQS4F03', item: 'Supercargo Liso', qty: 4, value: 'R$ 4.760,00' },
+  { id: 15, date: '05/04/2026', type: 'saida', driver: 'MATHEUS', vehicle: 'QWP1I64', item: 'Supercargo Liso', qty: 4, value: 'R$ 4.760,00' },
+]
