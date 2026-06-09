@@ -100,6 +100,25 @@ router.put('/:id', async (req, res) => {
   }
 })
 
+// PATCH /drivers/:id/vehicles — atualizar vínculo de veículos
+router.patch('/:id/vehicles', async (req, res) => {
+  const { truck_id, trailer_id, trailer_type } = req.body
+  try {
+    // Desativar vínculo atual
+    await query('UPDATE driver_vehicles SET active = 0 WHERE driver_id = ?', [req.params.id])
+    // Criar novo vínculo
+    await query(
+      `INSERT INTO driver_vehicles (driver_id, truck_id, trailer_id, trailer_type, since, active)
+       VALUES (?, ?, ?, ?, CURDATE(), 1)`,
+      [req.params.id, truck_id || null, trailer_id || null, trailer_type || null]
+    )
+    res.json({ message: 'Veículos atualizados' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Erro ao atualizar veículos' })
+  }
+})
+
 // DELETE /drivers/:id — desativar (soft delete)
 router.delete('/:id', async (req, res) => {
   try {

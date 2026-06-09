@@ -1,21 +1,89 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useDrivers } from '../../composables/useDrivers'
+import { useVehicles } from '../../composables/useVehicles'
+import { api } from '../../composables/useApi'
 
 const { drivers, loading, fetchAll, fetchOne } = useDrivers()
+const { vehicles, fetchAll: fetchVehicles } = useVehicles()
 
 const dSort = ref('tires-desc')
 const dFilter = ref('all')
 const selectedDriver = ref(null)
 
+// ── Novo motorista
+const showNewModal = ref(false)
+const newForm = ref({ name: '', color: '#2563eb', phone: '', cpf: '' })
+const newSaving = ref(false)
+const newError = ref('')
+const COLORS = ['#2563eb','#7c3aed','#059669','#d97706','#dc2626','#0891b2','#f59e0b','#10b981','#6366f1','#ec4899','#f97316','#14b8a6']
+
+async function saveNewDriver() {
+  if (!newForm.value.name.trim()) { newError.value = 'Nome obrigatório'; return }
+  newSaving.value = true
+  newError.value = ''
+  try {
+    await api.post('/drivers', newForm.value)
+    await fetchAll()
+    showNewModal.value = false
+    newForm.value = { name: '', color: '#2563eb', phone: '', cpf: '' }
+  } catch (e) {
+    newError.value = e.message || 'Erro ao salvar'
+  } finally {
+    newSaving.value = false
+  }
+}
+
+// ── Trocar veículos
+const showVehicleModal = ref(false)
+const vehicleForm = ref({ truck_id: '', trailer_id: '', trailer_type: '' })
+const vehicleSaving = ref(false)
+const vehicleError = ref('')
+
+const trucks   = computed(() => vehicles.value.filter(v => v.type === 'truck'))
+const trailers = computed(() => vehicles.value.filter(v => v.type === 'trailer'))
+
+const TRAILER_TYPES = ['Carreta', '9 Eixos', 'Frigorifica', 'Caçamba', 'Cavalo DAF']
+
+function openVehicleModal(driver) {
+  vehicleForm.value = {
+    truck_id:     trucks.value.find(t => t.plate === driver.truck_plate)?.id || '',
+    trailer_id:   trailers.value.find(t => t.plate === driver.trailer_plate)?.id || '',
+    trailer_type: driver.trailer_type || '',
+  }
+  vehicleError.value = ''
+  showVehicleModal.value = true
+}
+
+async function saveVehicles() {
+  vehicleSaving.value = true
+  vehicleError.value = ''
+  try {
+    await api.patch(`/drivers/${selectedDriver.value.id}/vehicles`, {
+      truck_id:     vehicleForm.value.truck_id   || null,
+      trailer_id:   vehicleForm.value.trailer_id || null,
+      trailer_type: vehicleForm.value.trailer_type || null,
+    })
+    await fetchAll()
+    const updated = await fetchOne(selectedDriver.value.id)
+    selectedDriver.value = updated
+    showVehicleModal.value = false
+  } catch (e) {
+    vehicleError.value = e.message || 'Erro ao atualizar'
+  } finally {
+    vehicleSaving.value = false
+  }
+}
+
+// ── Ordenação / filtro
 const sortedDrivers = computed(() => {
   let list = [...drivers.value]
-  if (dFilter.value === 'carreta') list = list.filter(d => ['Carreta', '9 Eixos', 'Caçamba'].includes(d.trailer_type))
-  else if (dFilter.value === 'frigorifico') list = list.filter(d => d.trailer_type === 'Frigorífica')
-  else if (dFilter.value === 'daf') list = list.filter(d => d.trailer_type === 'Cavalo DAF')
-  if (dSort.value === 'tires-desc') list.sort((a, b) => b.total_tires - a.total_tires)
+  if (dFilter.value === 'carreta')     list = list.filter(d => ['Carreta', '9 Eixos', 'Caçamba'].includes(d.trailer_type))
+  else if (dFilter.value === 'frigorifico') list = list.filter(d => d.trailer_type === 'Frigorifica')
+  else if (dFilter.value === 'daf')    list = list.filter(d => d.trailer_type === 'Cavalo DAF')
+  if (dSort.value === 'tires-desc')    list.sort((a, b) => b.total_tires - a.total_tires)
   else if (dSort.value === 'tires-asc') list.sort((a, b) => a.total_tires - b.total_tires)
-  else if (dSort.value === 'name') list.sort((a, b) => a.name.localeCompare(b.name))
+  else if (dSort.value === 'name')     list.sort((a, b) => a.name.localeCompare(b.name))
   return list
 })
 
@@ -24,7 +92,10 @@ async function selectDriver(d) {
   selectedDriver.value = detail
 }
 
-onMounted(() => fetchAll())
+onMounted(() => {
+  fetchAll()
+  fetchVehicles()
+})
 </script>
 
 <template>
@@ -35,7 +106,7 @@ onMounted(() => fetchAll())
     </div>
 
     <template v-else>
-      <!-- Filters -->
+      <!-- Filters + Novo -->
       <div class="bg-white rounded-[11px] py-3.5 px-[18px] border border-slate-200 mb-3.5 flex justify-between items-center flex-wrap gap-2.5">
         <div class="flex items-center gap-2.5 flex-wrap">
           <span class="text-xs font-bold text-slate-500">ORDENAR:</span>
@@ -49,9 +120,18 @@ onMounted(() => fetchAll())
           <button class="sbtn" :class="{ on: dFilter === 'frigorifico' }" @click="dFilter = 'frigorifico'">Frigorífica</button>
           <button class="sbtn" :class="{ on: dFilter === 'daf' }" @click="dFilter = 'daf'">DAF</button>
         </div>
-        <div class="text-xs text-slate-400">
-          <strong class="text-slate-900">{{ sortedDrivers.length }}</strong> motoristas &nbsp;·&nbsp;
-          <strong class="text-slate-900">{{ sortedDrivers.reduce((s, d) => s + Number(d.total_tires), 0) }}</strong> pneus distribuídos
+        <div class="flex items-center gap-2.5">
+          <div class="text-xs text-slate-400">
+            <strong class="text-slate-900">{{ sortedDrivers.length }}</strong> motoristas &nbsp;·&nbsp;
+            <strong class="text-slate-900">{{ sortedDrivers.reduce((s, d) => s + Number(d.total_tires), 0) }}</strong> pneus
+          </div>
+          <button
+            @click="showNewModal = true"
+            class="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors"
+          >
+            <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            Novo Motorista
+          </button>
         </div>
       </div>
 
@@ -113,12 +193,13 @@ onMounted(() => fetchAll())
       </div>
     </template>
 
-    <!-- Slide Panel -->
+    <!-- ───── Slide Panel ───── -->
     <Teleport to="body">
       <div v-if="selectedDriver" class="fixed inset-0 z-[70]">
         <div class="absolute inset-0 bg-black/30" @click="selectedDriver = null" />
         <div class="slide-panel">
-          <div class="p-6" :style="{ background: `linear-gradient(135deg, ${selectedDriver.color || '#2563eb'}, ${selectedDriver.color || '#2563eb'}dd)` }">
+          <!-- Header colorido -->
+          <div class="p-6 relative" :style="{ background: `linear-gradient(135deg, ${selectedDriver.color || '#2563eb'}, ${selectedDriver.color || '#2563eb'}dd)` }">
             <button @click="selectedDriver = null" class="absolute top-4 right-4 text-white/70 hover:text-white">
               <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
@@ -147,8 +228,19 @@ onMounted(() => fetchAll())
                 <div class="text-white font-extrabold text-sm">R$ {{ ((selectedDriver.total_tires ?? 0) * 1246).toLocaleString('pt-BR') }}</div>
               </div>
             </div>
+            <!-- Botão trocar veículos -->
+            <button
+              @click="openVehicleModal(selectedDriver)"
+              class="mt-4 w-full flex items-center justify-center gap-2 bg-white/15 hover:bg-white/25 text-white text-xs font-bold py-2.5 rounded-lg transition-colors"
+            >
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/><path d="M7 12h10v2H7zm0-4h10v2H7zm0 8h7v2H7z"/></svg>
+              Trocar Veículos Vinculados
+            </button>
           </div>
-          <div class="p-5">
+
+          <!-- Histórico de Pneus -->
+          <div class="p-5 overflow-y-auto flex-1">
             <h4 class="m-0 mb-3 text-sm font-bold text-slate-900">Histórico de Pneus</h4>
             <div v-if="selectedDriver.tireHistory && selectedDriver.tireHistory.length > 0">
               <div v-for="(h, i) in selectedDriver.tireHistory" :key="h.id" class="flex items-center gap-3 py-2.5 border-b border-slate-50">
@@ -166,6 +258,160 @@ onMounted(() => fetchAll())
               </div>
             </div>
             <div v-else class="text-xs text-slate-400 text-center py-8">Nenhum histórico registrado</div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ───── Modal Novo Motorista ───── -->
+    <Teleport to="body">
+      <div v-if="showNewModal" class="fixed inset-0 z-[80] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40" @click="showNewModal = false" />
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md z-10">
+          <div class="flex items-center justify-between p-5 border-b border-slate-100">
+            <h3 class="text-base font-bold text-slate-900 m-0">Novo Motorista</h3>
+            <button @click="showNewModal = false" class="text-slate-400 hover:text-slate-600">
+              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+          </div>
+          <div class="p-5 space-y-4">
+            <!-- Nome -->
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1.5">Nome *</label>
+              <input
+                v-model="newForm.name"
+                type="text"
+                placeholder="Ex: JOÃO SILVA"
+                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
+                @input="newForm.name = newForm.name.toUpperCase()"
+              />
+            </div>
+            <!-- Telefone -->
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1.5">Telefone</label>
+              <input
+                v-model="newForm.phone"
+                type="text"
+                placeholder="(00) 00000-0000"
+                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <!-- CPF -->
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1.5">CPF</label>
+              <input
+                v-model="newForm.cpf"
+                type="text"
+                placeholder="000.000.000-00"
+                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <!-- Cor -->
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-2">Cor de identificação</label>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="c in COLORS"
+                  :key="c"
+                  @click="newForm.color = c"
+                  class="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
+                  :style="{ background: c, borderColor: newForm.color === c ? '#1e293b' : 'transparent' }"
+                />
+              </div>
+              <div class="mt-2 flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full border border-slate-200 flex-shrink-0" :style="{ background: newForm.color }" />
+                <span class="text-xs text-slate-500">Prévia: {{ newForm.name || 'Nome' }}</span>
+              </div>
+            </div>
+            <p v-if="newError" class="text-red-500 text-xs">{{ newError }}</p>
+          </div>
+          <div class="flex gap-3 px-5 pb-5">
+            <button @click="showNewModal = false" class="flex-1 border border-slate-200 text-slate-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-slate-50">
+              Cancelar
+            </button>
+            <button
+              @click="saveNewDriver"
+              :disabled="newSaving"
+              class="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-bold py-2.5 rounded-lg transition-colors"
+            >
+              {{ newSaving ? 'Salvando...' : 'Cadastrar Motorista' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ───── Modal Trocar Veículos ───── -->
+    <Teleport to="body">
+      <div v-if="showVehicleModal" class="fixed inset-0 z-[90] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40" @click="showVehicleModal = false" />
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md z-10">
+          <div class="flex items-center justify-between p-5 border-b border-slate-100">
+            <div>
+              <h3 class="text-base font-bold text-slate-900 m-0">Trocar Veículos</h3>
+              <p class="text-xs text-slate-400 m-0">{{ selectedDriver?.name }}</p>
+            </div>
+            <button @click="showVehicleModal = false" class="text-slate-400 hover:text-slate-600">
+              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+          </div>
+          <div class="p-5 space-y-4">
+            <!-- Cavalo -->
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1.5">
+                <span class="font-mono text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-[10px] mr-1.5">TRUCK</span>
+                Cavalo (Caminhão)
+              </label>
+              <select
+                v-model="vehicleForm.truck_id"
+                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">— Sem cavalo —</option>
+                <option v-for="t in trucks" :key="t.id" :value="t.id">
+                  {{ t.plate }} — {{ t.brand }} {{ t.model }}
+                </option>
+              </select>
+            </div>
+            <!-- Carreta -->
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1.5">
+                <span class="font-mono text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded text-[10px] mr-1.5">TRAILER</span>
+                Carreta / Reboque
+              </label>
+              <select
+                v-model="vehicleForm.trailer_id"
+                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">— Sem carreta —</option>
+                <option v-for="t in trailers" :key="t.id" :value="t.id">
+                  {{ t.plate }} — {{ t.brand }} {{ t.model }}
+                </option>
+              </select>
+            </div>
+            <!-- Tipo -->
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1.5">Tipo de operação</label>
+              <select
+                v-model="vehicleForm.trailer_type"
+                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">— Selecione —</option>
+                <option v-for="tp in TRAILER_TYPES" :key="tp" :value="tp">{{ tp }}</option>
+              </select>
+            </div>
+            <p v-if="vehicleError" class="text-red-500 text-xs">{{ vehicleError }}</p>
+          </div>
+          <div class="flex gap-3 px-5 pb-5">
+            <button @click="showVehicleModal = false" class="flex-1 border border-slate-200 text-slate-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-slate-50">
+              Cancelar
+            </button>
+            <button
+              @click="saveVehicles"
+              :disabled="vehicleSaving"
+              class="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-bold py-2.5 rounded-lg transition-colors"
+            >
+              {{ vehicleSaving ? 'Salvando...' : 'Confirmar Troca' }}
+            </button>
           </div>
         </div>
       </div>

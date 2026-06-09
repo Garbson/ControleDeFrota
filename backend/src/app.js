@@ -16,6 +16,7 @@ const payableRoutes   = require('./routes/payable')
 const receivableRoutes = require('./routes/receivable')
 const fuelRoutes      = require('./routes/fuel')
 const dashboardRoutes = require('./routes/dashboard')
+const finesRoutes     = require('./routes/fines')
 
 const app = express()
 
@@ -58,6 +59,7 @@ app.use('/api/payable',    payableRoutes)
 app.use('/api/receivable', receivableRoutes)
 app.use('/api/fuel',       fuelRoutes)
 app.use('/api/dashboard',  dashboardRoutes)
+app.use('/api/fines',      finesRoutes)
 
 // ── 404
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada' }))
