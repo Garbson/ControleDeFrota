@@ -11,8 +11,10 @@ const pageInfo = computed(() => {
   const map = {
     dashboard: { title: 'Dashboard', subtitle: 'Visão geral da frota e movimentações recentes' },
     drivers: { title: 'Motoristas', subtitle: 'Gerenciar motoristas e histórico de consumo' },
+    vehicles: { title: 'Veículos', subtitle: 'Gerenciar frota de cavalos e carretas' },
     stock: { title: 'Estoque de Pneus', subtitle: 'Controle de pneus em estoque e notas fiscais' },
     fuel: { title: 'Combustível', subtitle: 'Controle de abastecimento por motorista e veículo' },
+    fines: { title: 'Multas', subtitle: 'Gerenciamento de multas de trânsito' },
     expense: { title: 'Lançar Despesa', subtitle: 'Registrar despesas de pneus, combustível e manutenção' },
     payable: { title: 'Contas a Pagar', subtitle: 'Gerenciamento de contas e obrigações financeiras' },
     receivable: { title: 'Contas a Receber', subtitle: 'Fretes e receitas a receber' },

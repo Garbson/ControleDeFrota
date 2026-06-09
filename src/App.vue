@@ -7,6 +7,7 @@ import AppTopbar from './components/layout/AppTopbar.vue'
 import Toast from './components/ui/Toast.vue'
 import DashboardView from './components/views/DashboardView.vue'
 import DriversView from './components/views/DriversView.vue'
+import VehiclesView from './components/views/VehiclesView.vue'
 import StockView from './components/views/StockView.vue'
 import ExpenseView from './components/views/ExpenseView.vue'
 import FuelView from './components/views/FuelView.vue'
@@ -75,6 +76,7 @@ onMounted(async () => {
       <div class="flex-1 overflow-y-auto p-[22px_26px] print:overflow-visible print:p-0" id="main-scroll">
         <DashboardView    v-if="currentView === 'dashboard'"  :show-toast="showToast" />
         <DriversView      v-else-if="currentView === 'drivers'"    :show-toast="showToast" />
+        <VehiclesView     v-else-if="currentView === 'vehicles'"   :show-toast="showToast" />
         <StockView        v-else-if="currentView === 'stock'"      :show-toast="showToast" />
         <FuelView         v-else-if="currentView === 'fuel'"       :show-toast="showToast" />
         <FinesView        v-else-if="currentView === 'fines'"      :show-toast="showToast" />

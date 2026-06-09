@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useStock } from '../../composables/useStock'
 import { useDrivers } from '../../composables/useDrivers'
+import { api } from '../../composables/useApi'
 import KPICard from '../ui/KPICard.vue'
 
 const props = defineProps({ showToast: Function })
@@ -11,8 +12,26 @@ const { drivers, fetchAll: fetchDrivers } = useDrivers()
 
 const sFilter = ref('all')
 const sSort = ref('qty-desc')
+
+// ── Saída
 const exitModal = ref(null)
 const exitForm = ref({ driver_id: '', qty: '', mov_date: '' })
+
+// ── Entrada
+const showEntryModal = ref(false)
+const entryMode = ref('existing') // 'existing' | 'new'
+const entryForm = ref({
+  stock_item_id: '',
+  description: '',
+  brand: '',
+  nf_number: '',
+  status: 'novo',
+  unit_price: '',
+  qty: '',
+  mov_date: new Date().toISOString().split('T')[0],
+  obs: '',
+})
+const entrySaving = ref(false)
 
 const totalStock = computed(() => items.value.reduce((s, i) => s + Number(i.qty), 0))
 const novosPneus = computed(() => items.value.filter(s => s.status === 'novo').reduce((a, s) => a + Number(s.qty), 0))
@@ -52,6 +71,71 @@ async function confirmExit() {
   }
 }
 
+// ── Entrada
+function openEntry() {
+  entryForm.value = {
+    stock_item_id: '',
+    description: '',
+    brand: '',
+    nf_number: '',
+    status: 'novo',
+    unit_price: '',
+    qty: '',
+    mov_date: new Date().toISOString().split('T')[0],
+    obs: '',
+  }
+  entryMode.value = 'existing'
+  showEntryModal.value = true
+}
+
+const selectedStockItem = computed(() => items.value.find(i => i.id == entryForm.value.stock_item_id) || null)
+
+async function confirmEntry() {
+  if (!entryForm.value.qty || Number(entryForm.value.qty) <= 0) return
+  entrySaving.value = true
+  try {
+    let stockItemId = entryForm.value.stock_item_id
+
+    // Se for novo item, criar primeiro
+    if (entryMode.value === 'new') {
+      if (!entryForm.value.description.trim()) {
+        props.showToast?.('❌ Informe a descrição do pneu')
+        entrySaving.value = false
+        return
+      }
+      const newItem = await api.post('/stock', {
+        description: entryForm.value.description,
+        brand: entryForm.value.brand || null,
+        nf_number: entryForm.value.nf_number || null,
+        status: entryForm.value.status,
+        qty: 0, // qty será atualizada pelo movimento
+        unit_price: entryForm.value.unit_price || null,
+        entry_date: entryForm.value.mov_date,
+      })
+      stockItemId = newItem.id
+    }
+
+    // Registrar movimento de entrada
+    await createMovement({
+      type: 'entrada',
+      stock_item_id: stockItemId,
+      driver_id: null,
+      qty: Number(entryForm.value.qty),
+      unit_value: entryForm.value.unit_price || null,
+      mov_date: entryForm.value.mov_date,
+      obs: entryForm.value.obs || null,
+    })
+
+    const item = items.value.find(i => i.id == stockItemId)
+    props.showToast?.(`✅ Entrada registrada: ${entryForm.value.qty} pneus de ${item?.description || 'novo item'}`)
+    showEntryModal.value = false
+  } catch (e) {
+    props.showToast?.('❌ Erro ao registrar entrada')
+  } finally {
+    entrySaving.value = false
+  }
+}
+
 const fmtValue = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
 
 onMounted(() => {
@@ -77,6 +161,13 @@ onMounted(() => {
       <button class="sbtn" :class="{ on: sFilter === 'novo' }" @click="sFilter = 'novo'">Novos</button>
       <button class="sbtn" :class="{ on: sFilter === 'recapado' }" @click="sFilter = 'recapado'">Recapados</button>
       <div class="ml-auto flex gap-2 items-center">
+        <button
+          @click="openEntry"
+          class="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors mr-2"
+        >
+          <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          Nova Entrada
+        </button>
         <span class="text-xs font-bold text-slate-500">ORDENAR:</span>
         <button class="sbtn" :class="{ on: sSort === 'qty-desc' }" @click="sSort = 'qty-desc'">↓ Maior qtd</button>
         <button class="sbtn" :class="{ on: sSort === 'qty-asc' }" @click="sSort = 'qty-asc'">↑ Menor qtd</button>
@@ -200,6 +291,133 @@ onMounted(() => {
             <div class="mt-5 pt-4 border-t border-slate-50 flex justify-between items-center">
               <button @click="exitModal = null" class="px-4 py-2 bg-transparent border border-slate-200 rounded-lg text-slate-500 text-xs font-semibold cursor-pointer">Cancelar</button>
               <button @click="confirmExit" class="btn-p" :disabled="!exitForm.qty">Confirmar Saída</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Entry Modal -->
+    <Teleport to="body">
+      <div v-if="showEntryModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" @click.self="showEntryModal = false">
+        <div class="bg-white rounded-xl w-[480px] shadow-2xl">
+          <div class="bg-gradient-to-br from-green-700 to-green-900 px-6 py-5 rounded-t-xl">
+            <h3 class="m-0 text-[15px] font-bold text-white">📦 Nova Entrada de Pneus</h3>
+            <p class="mt-1 mb-0 text-xs text-green-200">Registrar entrada no estoque</p>
+          </div>
+          <div class="p-6">
+            <!-- Modo: existente ou novo -->
+            <div class="flex gap-2 mb-5">
+              <button
+                @click="entryMode = 'existing'"
+                class="flex-1 py-2 rounded-lg text-xs font-semibold border-2 transition-colors"
+                :class="entryMode === 'existing' ? 'border-green-600 bg-green-50 text-green-700' : 'border-slate-200 text-slate-500'"
+              >
+                Item Existente
+              </button>
+              <button
+                @click="entryMode = 'new'"
+                class="flex-1 py-2 rounded-lg text-xs font-semibold border-2 transition-colors"
+                :class="entryMode === 'new' ? 'border-green-600 bg-green-50 text-green-700' : 'border-slate-200 text-slate-500'"
+              >
+                Novo Item
+              </button>
+            </div>
+
+            <!-- Modo: item existente -->
+            <div v-if="entryMode === 'existing'" class="space-y-4">
+              <div>
+                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Item de Estoque *</label>
+                <select v-model="entryForm.stock_item_id" class="finput">
+                  <option value="">Selecione o item...</option>
+                  <option v-for="i in items" :key="i.id" :value="i.id">
+                    {{ i.description }} {{ i.brand ? `(${i.brand})` : '' }} — {{ i.status === 'novo' ? 'Novo' : 'Recapado' }}
+                  </option>
+                </select>
+              </div>
+              <!-- Prévia do item selecionado -->
+              <div v-if="selectedStockItem" class="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <div class="text-[10px] font-bold text-slate-400 uppercase mb-1">Item selecionado</div>
+                <div class="flex justify-between items-center">
+                  <div>
+                    <div class="text-sm font-bold text-slate-900">{{ selectedStockItem.description }}</div>
+                    <div class="text-[11px] text-slate-500">{{ selectedStockItem.brand || '—' }} · Estoque atual: <strong>{{ selectedStockItem.qty }}</strong> un</div>
+                  </div>
+                  <span class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold" :class="selectedStockItem.status === 'novo' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'">
+                    {{ selectedStockItem.status === 'novo' ? 'Novo' : 'Recapado' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Modo: novo item -->
+            <div v-if="entryMode === 'new'" class="space-y-3.5">
+              <div>
+                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Descrição *</label>
+                <input v-model="entryForm.description" type="text" placeholder="Ex: Pneu 295/80R22.5" class="finput" />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Marca</label>
+                  <input v-model="entryForm.brand" type="text" placeholder="Ex: Michelin" class="finput" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">NF Origem</label>
+                  <input v-model="entryForm.nf_number" type="text" placeholder="Nº da NF" class="finput" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Tipo</label>
+                <div class="flex gap-2">
+                  <button
+                    @click="entryForm.status = 'novo'"
+                    class="flex-1 py-2 rounded-lg text-xs font-semibold border-2 transition-colors"
+                    :class="entryForm.status === 'novo' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500'"
+                  >
+                    Novo
+                  </button>
+                  <button
+                    @click="entryForm.status = 'recapado'"
+                    class="flex-1 py-2 rounded-lg text-xs font-semibold border-2 transition-colors"
+                    :class="entryForm.status === 'recapado' ? 'border-amber-600 bg-amber-50 text-amber-700' : 'border-slate-200 text-slate-500'"
+                  >
+                    Recapado
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Preço Unitário (R$)</label>
+                <input v-model="entryForm.unit_price" type="number" step="0.01" placeholder="0,00" class="finput" />
+              </div>
+            </div>
+
+            <!-- Campos comuns (qtd, data, obs) -->
+            <div class="space-y-4 mt-4 pt-4 border-t border-slate-100">
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Quantidade *</label>
+                  <input v-model="entryForm.qty" type="number" min="1" placeholder="Ex: 4" class="finput" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Data</label>
+                  <input v-model="entryForm.mov_date" type="date" class="finput" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Observação</label>
+                <input v-model="entryForm.obs" type="text" placeholder="Info adicional..." class="finput" />
+              </div>
+            </div>
+
+            <div class="mt-5 pt-4 border-t border-slate-50 flex justify-between items-center">
+              <button @click="showEntryModal = false" class="px-4 py-2 bg-transparent border border-slate-200 rounded-lg text-slate-500 text-xs font-semibold cursor-pointer">Cancelar</button>
+              <button
+                @click="confirmEntry"
+                class="btn-p !bg-green-600 hover:!bg-green-700"
+                :disabled="entrySaving || !entryForm.qty || (entryMode === 'existing' && !entryForm.stock_item_id)"
+              >
+                {{ entrySaving ? 'Salvando...' : 'Confirmar Entrada' }}
+              </button>
             </div>
           </div>
         </div>
