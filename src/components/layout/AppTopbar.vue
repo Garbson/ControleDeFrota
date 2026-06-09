@@ -1,11 +1,11 @@
 <script setup>
 import { computed } from 'vue'
+import { useAuth } from '../../composables/useAuth'
 
-const props = defineProps({
-  currentView: String,
-})
+const props = defineProps({ currentView: String })
+const emit = defineEmits(['navigate', 'logout'])
 
-const emit = defineEmits(['navigate'])
+const { user, logout } = useAuth()
 
 const pageInfo = computed(() => {
   const map = {
@@ -14,7 +14,7 @@ const pageInfo = computed(() => {
     stock: { title: 'Estoque de Pneus', subtitle: 'Controle de pneus em estoque e notas fiscais' },
     fuel: { title: 'Combustível', subtitle: 'Controle de abastecimento por motorista e veículo' },
     expense: { title: 'Lançar Despesa', subtitle: 'Registrar despesas de pneus, combustível e manutenção' },
-    payable: { title: 'Contas a Pagar', subtitle: 'Relatório de contas a pagar — Mai/2026' },
+    payable: { title: 'Contas a Pagar', subtitle: 'Gerenciamento de contas e obrigações financeiras' },
     receivable: { title: 'Contas a Receber', subtitle: 'Fretes e receitas a receber' },
     analytics: { title: 'Análise de Gastos', subtitle: 'Análise comparativa de custos e insights de frota' },
     nfs: { title: 'Notas Fiscais', subtitle: 'Histórico de compras e notas fiscais de entrada' },
@@ -24,6 +24,11 @@ const pageInfo = computed(() => {
 })
 
 const today = new Date().toLocaleDateString('pt-BR')
+
+async function handleLogout() {
+  await logout()
+  emit('logout')
+}
 </script>
 
 <template>
@@ -40,11 +45,25 @@ const today = new Date().toLocaleDateString('pt-BR')
         📅 {{ today }}
       </div>
       <div
-        @click="$emit('navigate', 'expense')"
+        @click="emit('navigate', 'expense')"
         class="bg-blue-600 rounded-md py-1 px-3 text-xs text-white font-semibold cursor-pointer flex items-center gap-1.5 hover:bg-blue-700 transition-colors"
       >
         <svg width="13" height="13" fill="white" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
         Novo Lançamento
+      </div>
+      <!-- User badge -->
+      <div class="flex items-center gap-2 pl-2 border-l border-slate-200">
+        <div class="w-7 h-7 bg-gradient-to-br from-violet-600 to-violet-900 rounded-full flex items-center justify-center text-[11px] font-bold text-white">
+          {{ user?.name?.[0]?.toUpperCase() || 'U' }}
+        </div>
+        <span class="text-xs text-slate-600 font-medium hidden sm:block">{{ user?.name || 'Usuário' }}</span>
+        <button
+          @click="handleLogout"
+          title="Sair do sistema"
+          class="text-slate-400 hover:text-red-500 transition-colors ml-1"
+        >
+          <svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+        </button>
       </div>
     </div>
   </div>

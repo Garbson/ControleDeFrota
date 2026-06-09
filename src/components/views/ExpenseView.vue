@@ -1,11 +1,14 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { drivers } from '../../data/drivers.js'
+import { ref, computed, onMounted } from 'vue'
+import { useDrivers } from '../../composables/useDrivers'
+import { api } from '../../composables/useApi'
 
 const props = defineProps({ showToast: Function })
 
+const { drivers, fetchAll: fetchDrivers } = useDrivers()
+
 const form = ref({
-  driver: '', vehicle: '', type: '', qty: 1, value: '', date: '', tireBrand: '', service: '', obs: ''
+  driver_id: '', type: '', qty: 1, value: '', date: '', description: '', obs: ''
 })
 
 const expenseTypes = {
@@ -16,21 +19,38 @@ const expenseTypes = {
   outros: 'Outros',
 }
 
-const formDriver = computed(() => drivers.find(d => d.name === form.value.driver) || null)
+const formDriver = computed(() => drivers.value.find(d => d.id == form.value.driver_id) || null)
 
 const formValid = computed(() =>
-  form.value.driver && form.value.vehicle && form.value.type && form.value.value && form.value.date
+  form.value.driver_id && form.value.type && form.value.value && form.value.date
 )
 
-function submitExpense() {
+async function submitExpense() {
   if (!formValid.value) return
-  props.showToast?.(`✅ Despesa de ${expenseTypes[form.value.type]} salva para ${form.value.driver}`)
-  resetForm()
+  try {
+    await api.post('/payable', {
+      category: form.value.type === 'manutencao' ? 'manutencao'
+               : form.value.type === 'pneu' ? 'pneus'
+               : form.value.type === 'pecas' ? 'pecas'
+               : 'administrativo',
+      description: form.value.description || expenseTypes[form.value.type],
+      driver_id: form.value.driver_id || null,
+      value: Number(form.value.value),
+      due_date: form.value.date,
+      obs: form.value.obs || null,
+    })
+    props.showToast?.(`✅ Despesa de ${expenseTypes[form.value.type]} salva para ${formDriver.value?.name || 'motorista'}`)
+    resetForm()
+  } catch (e) {
+    props.showToast?.('❌ Erro ao salvar despesa')
+  }
 }
 
 function resetForm() {
-  form.value = { driver: '', vehicle: '', type: '', qty: 1, value: '', date: '', tireBrand: '', service: '', obs: '' }
+  form.value = { driver_id: '', type: '', qty: 1, value: '', date: '', description: '', obs: '' }
 }
+
+onMounted(() => fetchDrivers())
 </script>
 
 <template>
@@ -45,20 +65,9 @@ function resetForm() {
           <!-- Motorista -->
           <div>
             <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Motorista *</label>
-            <select v-model="form.driver" @change="form.vehicle = ''" class="finput">
+            <select v-model="form.driver_id" class="finput">
               <option value="">Selecione o motorista...</option>
-              <option v-for="d in drivers" :key="d.id" :value="d.name">{{ d.name }}</option>
-            </select>
-          </div>
-          <!-- Veículo -->
-          <div>
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Veículo / Placa *</label>
-            <select v-model="form.vehicle" class="finput" :disabled="!form.driver">
-              <option value="">Selecione o veículo...</option>
-              <template v-if="formDriver">
-                <option v-if="formDriver.truck" :value="formDriver.truck">Cavalo — {{ formDriver.truck }}</option>
-                <option v-if="formDriver.trailer" :value="formDriver.trailer">{{ formDriver.trailerType }} — {{ formDriver.trailer }}</option>
-              </template>
+              <option v-for="d in drivers" :key="d.id" :value="d.id">{{ d.name }}</option>
             </select>
           </div>
           <!-- Tipo -->
@@ -73,7 +82,7 @@ function resetForm() {
               <option value="outros">📋 Outros</option>
             </select>
           </div>
-          <!-- Qtd -->
+          <!-- Qtd (só pneu) -->
           <div>
             <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Quantidade {{ form.type !== 'pneu' ? '(apenas pneus)' : '' }}</label>
             <input v-model="form.qty" type="number" min="1" placeholder="1" class="finput" :disabled="form.type !== 'pneu'" />
@@ -88,15 +97,10 @@ function resetForm() {
             <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Data *</label>
             <input v-model="form.date" type="date" class="finput" />
           </div>
-          <!-- Marca Pneu -->
-          <div v-if="form.type === 'pneu'" class="col-span-2">
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Marca / Tipo do Pneu</label>
-            <input v-model="form.tireBrand" placeholder="Ex: Continental Liso, Supercargo Borrachudo..." class="finput" />
-          </div>
-          <!-- Tipo Serviço -->
-          <div v-if="form.type === 'manutencao'" class="col-span-2">
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Tipo de Serviço</label>
-            <input v-model="form.service" placeholder="Ex: Troca de óleo, Freios, Suspensão..." class="finput" />
+          <!-- Descrição -->
+          <div>
+            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Descrição</label>
+            <input v-model="form.description" placeholder="Ex: Troca de pneu dianteiro..." class="finput" />
           </div>
           <!-- Obs -->
           <div class="col-span-2">
@@ -106,10 +110,10 @@ function resetForm() {
         </div>
 
         <!-- Resumo -->
-        <div v-if="form.driver && form.type && form.value" class="bg-slate-50 rounded-[10px] py-3.5 px-4 mt-[18px] border border-slate-200">
+        <div v-if="form.driver_id && form.type && form.value" class="bg-slate-50 rounded-[10px] py-3.5 px-4 mt-[18px] border border-slate-200">
           <div class="text-xs font-bold text-slate-500 mb-2 uppercase tracking-[0.04em]">Resumo do Lançamento</div>
           <div class="flex gap-6 flex-wrap">
-            <div><span class="text-[11px] text-slate-400">Motorista:</span> <strong class="text-slate-900">{{ form.driver }}</strong></div>
+            <div><span class="text-[11px] text-slate-400">Motorista:</span> <strong class="text-slate-900">{{ formDriver?.name }}</strong></div>
             <div><span class="text-[11px] text-slate-400">Tipo:</span> <strong class="text-slate-900">{{ expenseTypes[form.type] }}</strong></div>
             <div v-if="form.value"><span class="text-[11px] text-slate-400">Valor:</span> <strong class="text-blue-600">R$ {{ Number(form.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) }}</strong></div>
           </div>

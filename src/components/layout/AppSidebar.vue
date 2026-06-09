@@ -1,16 +1,25 @@
 <script setup>
-import { computed } from 'vue'
-import { accountsPayable } from '../../data/accounts-payable.js'
+import { ref, computed, onMounted } from 'vue'
+import { useAuth } from '../../composables/useAuth'
+import { api } from '../../composables/useApi'
 
-const props = defineProps({
-  currentView: String,
-})
+const props = defineProps({ currentView: String })
+const emit = defineEmits(['navigate', 'logout'])
 
-const emit = defineEmits(['navigate'])
+const { user } = useAuth()
 
-const pendingCount = computed(() => accountsPayable.filter(c => c.status === 'pendente').length)
+const pendingCount = ref(0)
 
-const menuSections = [
+async function loadPending() {
+  try {
+    const data = await api.get('/payable/summary')
+    pendingCount.value = Number(data.count_pendente || 0)
+  } catch {
+    pendingCount.value = 0
+  }
+}
+
+const menuSections = computed(() => [
   {
     title: 'Principal',
     items: [
@@ -24,7 +33,7 @@ const menuSections = [
   {
     title: 'Financeiro',
     items: [
-      { id: 'payable', label: 'Contas a Pagar', icon: 'payable', badge: pendingCount.value },
+      { id: 'payable', label: 'Contas a Pagar', icon: 'payable', badge: pendingCount.value || null },
       { id: 'receivable', label: 'Contas a Receber', icon: 'receivable' },
     ],
   },
@@ -36,11 +45,14 @@ const menuSections = [
       { id: 'report', label: 'Relatório Geral', icon: 'report' },
     ],
   },
-]
+])
 
-function navTo(view) {
-  emit('navigate', view)
-}
+const userInitial = computed(() => {
+  const name = user.value?.name || 'A'
+  return name[0].toUpperCase()
+})
+
+onMounted(() => loadPending())
 </script>
 
 <template>
@@ -71,7 +83,7 @@ function navTo(view) {
           :key="item.id"
           class="nav-item"
           :class="{ active: currentView === item.id }"
-          @click="navTo(item.id)"
+          @click="emit('navigate', item.id)"
         >
           <!-- Icons -->
           <svg v-if="item.icon === 'dashboard'" width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
@@ -87,10 +99,7 @@ function navTo(view) {
 
           {{ item.label }}
 
-          <span
-            v-if="item.badge"
-            class="ml-auto bg-red-500 text-white text-[10px] font-bold px-[7px] py-px rounded-full"
-          >
+          <span v-if="item.badge" class="ml-auto bg-red-500 text-white text-[10px] font-bold px-[7px] py-px rounded-full">
             {{ item.badge }}
           </span>
         </div>
@@ -101,13 +110,20 @@ function navTo(view) {
     <!-- User -->
     <div class="py-3.5 px-4 border-t border-white/5">
       <div class="flex items-center gap-2">
-        <div class="w-[31px] h-[31px] bg-gradient-to-br from-violet-600 to-violet-900 rounded-full flex items-center justify-center text-xs font-bold text-white">
-          A
+        <div class="w-[31px] h-[31px] bg-gradient-to-br from-violet-600 to-violet-900 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+          {{ userInitial }}
         </div>
-        <div>
-          <div class="text-slate-200 text-xs font-semibold">Administrador</div>
-          <div class="text-slate-600 text-[10px]">admin@empresa.com.br</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-slate-200 text-xs font-semibold truncate">{{ user?.name || 'Usuário' }}</div>
+          <div class="text-slate-600 text-[10px] truncate">{{ user?.email || '' }}</div>
         </div>
+        <button
+          @click="emit('logout')"
+          title="Sair"
+          class="text-slate-600 hover:text-slate-400 transition-colors flex-shrink-0 ml-1"
+        >
+          <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+        </button>
       </div>
     </div>
   </aside>

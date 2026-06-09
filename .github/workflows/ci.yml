@@ -1,0 +1,121 @@
+name: CI — ControleDeFrota
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ──────────────────────────────────────────
+  # 1. Testes do Backend
+  # ──────────────────────────────────────────
+  backend-test:
+    name: Backend — Lint + Testes
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalar dependências
+        working-directory: backend
+        run: npm ci
+
+      - name: Executar testes
+        working-directory: backend
+        env:
+          NODE_ENV: test
+          JWT_SECRET: test_secret_key_for_tests_only
+          JWT_REFRESH_SECRET: test_refresh_secret_key_for_tests_only
+        run: npm test
+
+  # ──────────────────────────────────────────
+  # 2. Build do Frontend
+  # ──────────────────────────────────────────
+  frontend-build:
+    name: Frontend — Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Build de produção
+        env:
+          VITE_API_URL: /api
+        run: npm run build
+
+      - name: Upload do build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist/
+          retention-days: 1
+
+  # ──────────────────────────────────────────
+  # 3. Deploy na VPS (somente na main)
+  # ──────────────────────────────────────────
+  deploy:
+    name: Deploy — VPS
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar sshpass
+        run: sudo apt-get install -y sshpass rsync
+
+      - name: Sincronizar arquivos (rsync)
+        env:
+          VPS_PASS: ${{ secrets.VPS_PASS }}
+        run: |
+          # Rsync sem --delete para preservar .env e dados locais do servidor
+          sshpass -p "$VPS_PASS" rsync -avz \
+            -e "ssh -o StrictHostKeyChecking=no" \
+            --exclude .env \
+            --exclude node_modules \
+            --exclude .git \
+            --exclude dist \
+            --exclude 'backend/node_modules' \
+            ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/apps/controlefrota/
+
+      - name: Rebuild e restart dos containers
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASS }}
+          script: |
+            set -e
+            cd /opt/apps/controlefrota
+
+            echo "🏗️ Rebuild API e Frontend (MySQL preservado)..."
+            docker compose build controlefrota-api controlefrota-web
+
+            echo "🔄 Restart API e Frontend..."
+            docker compose up -d --no-recreate controlefrota-mysql
+            docker compose up -d controlefrota-api controlefrota-web
+
+            echo "🔍 Verificando saúde..."
+            sleep 15
+            docker compose ps
+
+            echo "✅ Deploy concluído!"

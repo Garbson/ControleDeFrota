@@ -1,0 +1,90 @@
+version: '3.9'
+
+# ============================================================
+# ControleDeFrota — Docker Compose
+# Cada serviço fica isolado na rede controlefrota-net
+# ============================================================
+
+services:
+
+  # ── MySQL dedicado
+  controlefrota-mysql:
+    image: mysql:8.0
+    container_name: controlefrota-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: controlefrota
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS}
+    volumes:
+      - controlefrota-mysql-data:/var/lib/mysql
+      - ./backend/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql:ro
+      - ./backend/migrations/002_seed_data.sql:/docker-entrypoint-initdb.d/002_seed_data.sql:ro
+    networks:
+      - controlefrota-net
+    ports:
+      - "3310:3306"   # só para acesso local/debug — remover em produção
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── API Node.js
+  controlefrota-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: controlefrota-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DB_HOST: controlefrota-mysql
+      DB_PORT: 3306
+      DB_NAME: controlefrota
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_REFRESH_EXPIRES_IN: 7d
+      FRONTEND_URL: https://controlefrota.zlabs.com.br
+    depends_on:
+      controlefrota-mysql:
+        condition: service_healthy
+    networks:
+      - controlefrota-net
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:4000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Frontend Vue (nginx)
+  controlefrota-web:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    container_name: controlefrota-web
+    restart: unless-stopped
+    networks:
+      - controlefrota-net
+    depends_on:
+      - controlefrota-api
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  controlefrota-mysql-data:
+    name: controlefrota-mysql-data
+
+networks:
+  # Rede interna — todos os containers se comunicam
+  controlefrota-net:
+    name: controlefrota-net
+    driver: bridge
