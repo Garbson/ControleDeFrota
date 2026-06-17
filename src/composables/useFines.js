@@ -4,14 +4,16 @@ import { api } from './useApi'
 const items = ref([])
 const summary = ref({ total: 0, total_value: 0, count_pendente: 0, value_pendente: 0, count_pago: 0, value_pago: 0, count_recurso: 0 })
 const loading = ref(false)
+const descriptions = ref([])
 
 export function useFines() {
   async function fetchAll(filters = {}) {
     loading.value = true
     try {
       const params = new URLSearchParams()
-      if (filters.status)    params.set('status', filters.status)
-      if (filters.driver_id) params.set('driver_id', filters.driver_id)
+      if (filters.status)      params.set('status', filters.status)
+      if (filters.driver_id)   params.set('driver_id', filters.driver_id)
+      if (filters.description) params.set('description', filters.description)
       const qs = params.toString()
       items.value = await api.get(`/fines${qs ? '?' + qs : ''}`)
     } finally {
@@ -21,6 +23,14 @@ export function useFines() {
 
   async function fetchSummary() {
     summary.value = await api.get('/fines/summary')
+  }
+
+  async function fetchDescriptions() {
+    try {
+      descriptions.value = await api.get('/fines/descriptions')
+    } catch {
+      descriptions.value = []
+    }
   }
 
   async function create(data) {
@@ -50,5 +60,5 @@ export function useFines() {
     await fetchSummary()
   }
 
-  return { items, summary, loading, fetchAll, fetchSummary, create, markPaid, markAppeal, remove }
+  return { items, summary, loading, descriptions, fetchAll, fetchSummary, fetchDescriptions, create, markPaid, markAppeal, remove }
 }

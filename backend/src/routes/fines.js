@@ -8,7 +8,7 @@ router.use(authenticate)
 // GET /fines — listar com filtros
 router.get('/', async (req, res) => {
   try {
-    const { status, driver_id } = req.query
+    const { status, driver_id, description } = req.query
     let sql = `
       SELECT f.*, d.name AS driver_name, d.color AS driver_color
       FROM fines f
@@ -16,8 +16,9 @@ router.get('/', async (req, res) => {
       WHERE 1=1
     `
     const params = []
-    if (status)    { sql += ' AND f.status = ?';    params.push(status) }
-    if (driver_id) { sql += ' AND f.driver_id = ?'; params.push(driver_id) }
+    if (status)      { sql += ' AND f.status = ?';      params.push(status) }
+    if (driver_id)   { sql += ' AND f.driver_id = ?';   params.push(driver_id) }
+    if (description) { sql += ' AND f.description = ?'; params.push(description) }
     sql += ' ORDER BY f.fine_date DESC'
     res.json(await query(sql, params))
   } catch (err) {
@@ -43,6 +44,19 @@ router.get('/summary', async (req, res) => {
     res.json(row)
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar resumo' })
+  }
+})
+
+// GET /fines/descriptions — códigos de multa distintos para filtro dinâmico
+router.get('/descriptions', async (req, res) => {
+  try {
+    const rows = await query(
+      `SELECT DISTINCT description FROM fines WHERE description IS NOT NULL AND description != '' ORDER BY description`
+    )
+    res.json(rows.map(r => r.description))
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Erro ao buscar descrições' })
   }
 })
 

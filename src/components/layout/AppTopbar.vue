@@ -15,6 +15,7 @@ const pageInfo = computed(() => {
     stock: { title: 'Estoque de Pneus', subtitle: 'Controle de pneus em estoque e notas fiscais' },
     fuel: { title: 'Combustível', subtitle: 'Controle de abastecimento por motorista e veículo' },
     fines: { title: 'Multas', subtitle: 'Gerenciamento de multas de trânsito' },
+    trips: { title: 'Viagens', subtitle: 'Gestão de viagens, gastos e lucro por rota' },
     expense: { title: 'Lançar Despesa', subtitle: 'Registrar despesas de pneus, combustível e manutenção' },
     payable: { title: 'Contas a Pagar', subtitle: 'Gerenciamento de contas e obrigações financeiras' },
     receivable: { title: 'Contas a Receber', subtitle: 'Fretes e receitas a receber' },

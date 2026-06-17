@@ -8,7 +8,7 @@ const props = defineProps({ showToast: Function })
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
 
 const form = ref({
-  driver_id: '', type: '', qty: 1, value: '', date: '', description: '', obs: ''
+  driver_id: '', type: '', qty: 1, value: '', date: '', due_date: '', description: '', obs: ''
 })
 
 const expenseTypes = {
@@ -36,7 +36,7 @@ async function submitExpense() {
       description: form.value.description || expenseTypes[form.value.type],
       driver_id: form.value.driver_id || null,
       value: Number(form.value.value),
-      due_date: form.value.date,
+      due_date: form.value.due_date || form.value.date,
       obs: form.value.obs || null,
     })
     props.showToast?.(`✅ Despesa de ${expenseTypes[form.value.type]} salva para ${formDriver.value?.name || 'motorista'}`)
@@ -47,7 +47,7 @@ async function submitExpense() {
 }
 
 function resetForm() {
-  form.value = { driver_id: '', type: '', qty: 1, value: '', date: '', description: '', obs: '' }
+  form.value = { driver_id: '', type: '', qty: 1, value: '', date: '', due_date: '', description: '', obs: '' }
 }
 
 onMounted(() => fetchDrivers())
@@ -92,10 +92,16 @@ onMounted(() => fetchDrivers())
             <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Valor (R$) *</label>
             <input v-model="form.value" type="number" step="0.01" placeholder="0,00" class="finput" />
           </div>
-          <!-- Data -->
+          <!-- Data da Despesa -->
           <div>
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Data *</label>
+            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Data da Despesa *</label>
             <input v-model="form.date" type="date" class="finput" />
+          </div>
+          <!-- Data de Vencimento -->
+          <div>
+            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Data de Vencimento</label>
+            <input v-model="form.due_date" type="date" class="finput" />
+            <p class="text-[10px] text-slate-400 mt-1">Se vazio, usa a data da despesa</p>
           </div>
           <!-- Descrição -->
           <div>
@@ -116,6 +122,7 @@ onMounted(() => fetchDrivers())
             <div><span class="text-[11px] text-slate-400">Motorista:</span> <strong class="text-slate-900">{{ formDriver?.name }}</strong></div>
             <div><span class="text-[11px] text-slate-400">Tipo:</span> <strong class="text-slate-900">{{ expenseTypes[form.type] }}</strong></div>
             <div v-if="form.value"><span class="text-[11px] text-slate-400">Valor:</span> <strong class="text-blue-600">R$ {{ Number(form.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) }}</strong></div>
+            <div v-if="form.due_date || form.date"><span class="text-[11px] text-slate-400">Vencimento:</span> <strong class="text-red-600">{{ new Date(form.due_date || form.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) }}</strong></div>
           </div>
         </div>
 

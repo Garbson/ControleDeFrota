@@ -4,11 +4,12 @@ import { useFines } from '../../composables/useFines'
 import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
 
-const { items, summary, loading, fetchAll, fetchSummary, create, markPaid, markAppeal, remove } = useFines()
+const { items, summary, loading, descriptions, fetchAll, fetchSummary, fetchDescriptions, create, markPaid, markAppeal, remove } = useFines()
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
 const { vehicles, fetchAll: fetchVehicles } = useVehicles()
 
 const statusFilter = ref('all')
+const descriptionFilter = ref('')
 const showModal = ref(false)
 const saving = ref(false)
 const formError = ref('')
@@ -50,8 +51,10 @@ const STATUS_COLORS = {
 const allPlates = computed(() => vehicles.value.map(v => v.plate).sort())
 
 const filtered = computed(() => {
-  if (statusFilter.value === 'all') return items.value
-  return items.value.filter(f => f.status === statusFilter.value)
+  let list = items.value
+  if (statusFilter.value !== 'all') list = list.filter(f => f.status === statusFilter.value)
+  if (descriptionFilter.value) list = list.filter(f => f.description === descriptionFilter.value)
+  return list
 })
 
 const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -106,7 +109,7 @@ async function del(fine) {
 }
 
 onMounted(async () => {
-  await Promise.all([fetchAll(), fetchSummary(), fetchDrivers(), fetchVehicles()])
+  await Promise.all([fetchAll(), fetchSummary(), fetchDrivers(), fetchVehicles(), fetchDescriptions()])
 })
 </script>
 
@@ -145,6 +148,13 @@ onMounted(async () => {
         <button class="sbtn" :class="{ on: statusFilter === 'pendente' }" @click="statusFilter = 'pendente'">Pendentes</button>
         <button class="sbtn" :class="{ on: statusFilter === 'recurso' }"  @click="statusFilter = 'recurso'">Em Recurso</button>
         <button class="sbtn" :class="{ on: statusFilter === 'pago' }"     @click="statusFilter = 'pago'">Pagas</button>
+      </div>
+      <div class="flex items-center gap-2.5">
+        <span class="text-xs font-bold text-slate-500">CÓDIGO:</span>
+        <select v-model="descriptionFilter" class="text-xs border border-slate-200 rounded-md px-2 py-1.5 min-w-[160px]">
+          <option value="">Todos os códigos</option>
+          <option v-for="d in descriptions" :key="d" :value="d">{{ d }}</option>
+        </select>
       </div>
       <button
         @click="showModal = true"

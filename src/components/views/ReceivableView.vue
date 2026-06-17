@@ -16,6 +16,24 @@ const filteredCR = computed(() => {
 
 const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
 
+function fmtDate(raw) {
+  if (!raw) return '—'
+  const d = new Date(raw)
+  if (isNaN(d)) return raw
+  return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+}
+
+function dueBadge(raw, status) {
+  if (status === 'recebido' || !raw) return null
+  const today = new Date(); today.setHours(0,0,0,0)
+  const due = new Date(raw); due.setHours(0,0,0,0)
+  const diff = Math.round((due - today) / 86400000)
+  if (diff < 0)  return { label: `${Math.abs(diff)}d vencido`, cls: 'bg-red-100 text-red-700' }
+  if (diff === 0) return { label: 'Vence hoje', cls: 'bg-red-100 text-red-700' }
+  if (diff <= 7)  return { label: `Vence em ${diff}d`, cls: 'bg-amber-100 text-amber-700' }
+  return null
+}
+
 const pendentes = computed(() => items.value.filter(c => c.status === 'pendente'))
 const recebidos = computed(() => items.value.filter(c => c.status === 'recebido'))
 const crTotal = computed(() => items.value.reduce((s, c) => s + Number(c.value || 0), 0))
@@ -71,7 +89,12 @@ onMounted(() => {
           </thead>
           <tbody>
             <tr class="trow" v-for="c in filteredCR" :key="c.id">
-              <td class="td font-medium whitespace-nowrap">{{ c.due_date || c.issue_date || '—' }}</td>
+              <td class="td whitespace-nowrap">
+                <div class="font-semibold text-slate-900">{{ fmtDate(c.due_date || c.issue_date) }}</div>
+                <span v-if="dueBadge(c.due_date, c.status)" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full" :class="dueBadge(c.due_date, c.status).cls">
+                  {{ dueBadge(c.due_date, c.status).label }}
+                </span>
+              </td>
               <td class="td font-semibold text-slate-900 text-xs max-w-[160px] truncate" :title="c.client">{{ c.client || '—' }}</td>
               <td class="td text-xs">{{ c.description || c.type || '—' }}</td>
               <td class="td font-extrabold text-slate-900 whitespace-nowrap">R$ {{ fmt(c.value) }}</td>

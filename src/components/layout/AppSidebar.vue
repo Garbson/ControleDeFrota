@@ -28,6 +28,7 @@ const menuSections = computed(() => [
       { id: 'vehicles', label: 'Veículos', icon: 'vehicles' },
       { id: 'stock', label: 'Estoque de Pneus', icon: 'stock' },
       { id: 'fuel', label: 'Combustível', icon: 'fuel' },
+      { id: 'trips', label: 'Viagens', icon: 'trips' },
       { id: 'fines', label: 'Multas', icon: 'fines' },
       { id: 'expense', label: 'Lançar Despesa', icon: 'expense' },
     ],
@@ -95,6 +96,7 @@ onMounted(() => loadPending())
           <svg v-else-if="item.icon === 'fuel'" width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33 0 1.38 1.12 2.5 2.5 2.5.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14c0-1.1-.9-2-2-2h-1V5c0-1.1-.9-2-2-2H6c-1.1 0-2 .9-2 2v16h10v-7.5h1.5v5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V9c0-.69-.28-1.32-.73-1.77zM12 13H6v-3h6v3zm0-5H6V5h6v3z"/></svg>
           <svg v-else-if="item.icon === 'fines'" width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
           <svg v-else-if="item.icon === 'expense'" width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
+          <svg v-else-if="item.icon === 'trips'" width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11C5.67 5 5 5.67 5 6.5S5.67 8 6.5 8h7.59l-2.15 2.15c-.3.3-.05.81.34.71 2.33-.55 6.01-1.65 8.29-3.03.33-.2.37-.67.08-.93L18.92 6.01zM5 10v5h2v-5H5zm3 0v5h1v-5H8zm3 0v5h2v-5h-2zm3 0v5h1v-5h-1zm-8 7v2h14v-3H6v1z"/></svg>
           <svg v-else-if="item.icon === 'payable'" width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
           <svg v-else-if="item.icon === 'receivable'" width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
           <svg v-else-if="item.icon === 'analytics'" width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>

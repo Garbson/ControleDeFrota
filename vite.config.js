@@ -8,8 +8,9 @@ export default defineConfig({
     proxy: {
       // Em dev, redireciona /api → backend local
       '/api': {
-        target: 'http://localhost:4000',
+        target: 'https://controlefrota.zlabs.com.br',
         changeOrigin: true,
+        secure: false,
       },
     },
   },

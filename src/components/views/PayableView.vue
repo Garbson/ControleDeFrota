@@ -27,12 +27,33 @@ const filteredCP = computed(() => {
 
 const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
 
+function fmtDate(raw) {
+  if (!raw) return '—'
+  const d = new Date(raw)
+  if (isNaN(d)) return raw
+  return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+}
+
+function dueBadge(raw, status) {
+  if (status === 'pago' || !raw) return null
+  const today = new Date(); today.setHours(0,0,0,0)
+  const due = new Date(raw); due.setHours(0,0,0,0)
+  const diff = Math.round((due - today) / 86400000)
+  if (diff < 0)  return { label: `${Math.abs(diff)}d vencido`, cls: 'bg-red-100 text-red-700' }
+  if (diff === 0) return { label: 'Vence hoje', cls: 'bg-red-100 text-red-700' }
+  if (diff <= 7)  return { label: `Vence em ${diff}d`, cls: 'bg-amber-100 text-amber-700' }
+  return null
+}
+
 const pendentes = computed(() => items.value.filter(c => c.status === 'pendente'))
 const pagos = computed(() => items.value.filter(c => c.status === 'pago'))
 const cpTotal = computed(() => items.value.reduce((s, c) => s + Number(c.value || 0), 0))
 const cpPendente = computed(() => pendentes.value.reduce((s, c) => s + Number(c.value || 0), 0))
 const cpPago = computed(() => pagos.value.reduce((s, c) => s + Number(c.value || 0), 0))
-const nextDue = computed(() => pendentes.value.sort((a, b) => a.due_date?.localeCompare(b.due_date))[0]?.due_date || '—')
+const nextDue = computed(() => {
+  const d = [...pendentes.value].sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))[0]?.due_date
+  return d ? fmtDate(d) : '—'
+})
 
 async function handleMarkPaid(item) {
   const today = new Date().toISOString().split('T')[0]
@@ -97,7 +118,12 @@ onMounted(() => {
           </thead>
           <tbody>
             <tr class="trow" v-for="c in filteredCP" :key="c.id">
-              <td class="td font-medium whitespace-nowrap">{{ c.due_date }}</td>
+              <td class="td whitespace-nowrap">
+                <div class="font-semibold text-slate-900">{{ fmtDate(c.due_date) }}</div>
+                <span v-if="dueBadge(c.due_date, c.status)" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full" :class="dueBadge(c.due_date, c.status).cls">
+                  {{ dueBadge(c.due_date, c.status).label }}
+                </span>
+              </td>
               <td class="td font-extrabold text-slate-900 whitespace-nowrap">R$ {{ fmt(c.value) }}</td>
               <td class="td text-xs max-w-[200px] truncate">{{ c.description || c.document || '—' }}</td>
               <td class="td">

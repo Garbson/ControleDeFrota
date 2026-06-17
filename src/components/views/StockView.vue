@@ -1,7 +1,8 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useStock } from '../../composables/useStock'
 import { useDrivers } from '../../composables/useDrivers'
+import { useVehicles } from '../../composables/useVehicles'
 import { api } from '../../composables/useApi'
 import KPICard from '../ui/KPICard.vue'
 
@@ -9,13 +10,20 @@ const props = defineProps({ showToast: Function })
 
 const { items, movements, loading, fetchAll, fetchMovements, createMovement } = useStock()
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
+const { vehicles, fetchAll: fetchVehicles } = useVehicles()
 
 const sFilter = ref('all')
 const sSort = ref('qty-desc')
 
 // ── Saída
 const exitModal = ref(null)
-const exitForm = ref({ driver_id: '', qty: '', mov_date: '' })
+const exitForm = ref({ driver_id: '', qty: '', mov_date: '', vehicle_plate: '', obs: '' })
+
+// Auto-preenche placa ao selecionar motorista
+watch(() => exitForm.value.driver_id, (id) => {
+  const driver = drivers.value.find(d => d.id == id)
+  exitForm.value.vehicle_plate = driver?.truck_plate || ''
+})
 
 // ── Entrada
 const showEntryModal = ref(false)
@@ -49,19 +57,28 @@ const filteredStock = computed(() => {
 
 function openExit(item) {
   exitModal.value = item
-  exitForm.value = { driver_id: '', qty: '', mov_date: new Date().toISOString().split('T')[0] }
+  exitForm.value = { driver_id: '', qty: '', mov_date: new Date().toISOString().split('T')[0], vehicle_plate: '', obs: '' }
 }
 
 async function confirmExit() {
   if (!exitForm.value.qty) return
   try {
+    const plate = (exitForm.value.vehicle_plate || '').trim().toUpperCase()
+    const matchedVehicle = plate ? vehicles.value.find(v => v.plate.toUpperCase() === plate) : null
+    const obsText = [
+      exitForm.value.obs || '',
+      plate && !matchedVehicle ? `Placa: ${plate}` : '',
+    ].filter(Boolean).join(' | ') || null
+
     await createMovement({
       type: 'saida',
       stock_item_id: exitModal.value.id,
       driver_id: exitForm.value.driver_id || null,
+      vehicle_id: matchedVehicle ? matchedVehicle.id : null,
       qty: Number(exitForm.value.qty),
       unit_value: exitModal.value.unit_price || null,
       mov_date: exitForm.value.mov_date || new Date().toISOString().split('T')[0],
+      obs: obsText,
     })
     const d = drivers.value.find(dr => dr.id == exitForm.value.driver_id)
     props.showToast?.(`✅ Saída registrada: ${exitForm.value.qty} pneus${d ? ' para ' + d.name : ''}`)
@@ -142,6 +159,7 @@ onMounted(() => {
   fetchAll()
   fetchMovements()
   fetchDrivers()
+  fetchVehicles()
 })
 </script>
 
@@ -239,7 +257,7 @@ onMounted(() => {
         <thead>
           <tr>
             <th class="th">Data</th><th class="th">Tipo</th><th class="th">Item</th>
-            <th class="th">Motorista</th><th class="th">Qtd</th><th class="th">Valor Total</th>
+            <th class="th">Motorista</th><th class="th">Placa</th><th class="th">Qtd</th><th class="th">Obs</th>
           </tr>
         </thead>
         <tbody>
@@ -252,10 +270,12 @@ onMounted(() => {
             </td>
             <td class="td text-xs font-semibold">{{ m.item_name || '—' }}</td>
             <td class="td text-xs">{{ m.driver_name || '—' }}</td>
-            <td class="td font-bold text-slate-900">{{ m.qty }}</td>
-            <td class="td font-bold text-slate-900">
-              {{ m.total_value ? `R$ ${Number(m.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—' }}
+            <td class="td">
+              <span v-if="m.vehicle_plate" class="font-mono text-[11px] font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded">{{ m.vehicle_plate }}</span>
+              <span v-else class="text-slate-300 text-xs">—</span>
             </td>
+            <td class="td font-bold text-slate-900">{{ m.qty }}</td>
+            <td class="td text-xs text-slate-500 max-w-[180px] truncate">{{ m.obs || '—' }}</td>
           </tr>
         </tbody>
       </table>
@@ -280,12 +300,29 @@ onMounted(() => {
                 </select>
               </div>
               <div>
-                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Quantidade</label>
-                <input v-model="exitForm.qty" type="number" min="1" :max="exitModal.qty" :placeholder="`Máx: ${exitModal.qty}`" class="finput" />
+                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Placa</label>
+                <input
+                  v-model="exitForm.vehicle_plate"
+                  type="text"
+                  placeholder="Placa do veículo"
+                  class="finput font-mono uppercase"
+                  maxlength="12"
+                />
+                <p v-if="exitForm.driver_id && !exitForm.vehicle_plate" class="text-[10px] text-slate-400 mt-1">Motorista sem placa vinculada</p>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Quantidade</label>
+                  <input v-model="exitForm.qty" type="number" min="1" :max="exitModal.qty" :placeholder="`Máx: ${exitModal.qty}`" class="finput" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Data</label>
+                  <input v-model="exitForm.mov_date" type="date" class="finput" />
+                </div>
               </div>
               <div>
-                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Data</label>
-                <input v-model="exitForm.mov_date" type="date" class="finput" />
+                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Observação</label>
+                <input v-model="exitForm.obs" type="text" placeholder="Ex: troca preventiva dianteiro..." class="finput" />
               </div>
             </div>
             <div class="mt-5 pt-4 border-t border-slate-50 flex justify-between items-center">

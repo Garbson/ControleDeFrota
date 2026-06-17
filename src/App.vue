@@ -17,6 +17,7 @@ import AnalyticsView from './components/views/AnalyticsView.vue'
 import NfsView from './components/views/NfsView.vue'
 import ReportView from './components/views/ReportView.vue'
 import FinesView from './components/views/FinesView.vue'
+import TripsView from './components/views/TripsView.vue'
 
 const { isAuthenticated, fetchMe, logout } = useAuth()
 
@@ -80,6 +81,7 @@ onMounted(async () => {
         <StockView        v-else-if="currentView === 'stock'"      :show-toast="showToast" />
         <FuelView         v-else-if="currentView === 'fuel'"       :show-toast="showToast" />
         <FinesView        v-else-if="currentView === 'fines'"      :show-toast="showToast" />
+        <TripsView        v-else-if="currentView === 'trips'"      :show-toast="showToast" />
         <ExpenseView      v-else-if="currentView === 'expense'"    :show-toast="showToast" />
         <PayableView      v-else-if="currentView === 'payable'"    :show-toast="showToast" />
         <ReceivableView   v-else-if="currentView === 'receivable'" :show-toast="showToast" />
