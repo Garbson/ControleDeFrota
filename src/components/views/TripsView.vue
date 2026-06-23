@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useTrips } from '../../composables/useTrips'
 import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
@@ -7,7 +7,7 @@ import KPICard from '../ui/KPICard.vue'
 
 const props = defineProps({ showToast: Function })
 
-const { items, summary, loading, fetchAll, fetchOne, fetchSummary, create, update, remove } = useTrips()
+const { items, summary, loading, fetchAll, fetchOne, fetchSummary, create, update, remove, addLeg, updateLeg, removeLeg } = useTrips()
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
 const { vehicles, fetchAll: fetchVehicles } = useVehicles()
 
@@ -42,6 +42,104 @@ const showDetail = ref(false)
 const detailTrip = ref(null)
 const detailLoading = ref(false)
 
+// Trechos no form de criar/editar
+const formLegs = ref([])
+const deletedLegIds = ref([])
+
+function addFormLeg() {
+  const lastDest = formLegs.value.length
+    ? formLegs.value[formLegs.value.length - 1].destination
+    : form.value.origin
+  formLegs.value.push({ _key: Date.now() + Math.random(), id: null, origin: lastDest, destination: '', client: '', freight_value: '', freight_status: 'a_receber' })
+}
+
+function removeFormLeg(index) {
+  const leg = formLegs.value[index]
+  if (leg.id) deletedLegIds.value.push(leg.id)
+  formLegs.value.splice(index, 1)
+}
+
+watch(formLegs, (legs) => {
+  if (legs.length === 0) return
+  if (legs[0].origin) form.value.origin = legs[0].origin
+  if (legs[legs.length - 1].destination) form.value.destination = legs[legs.length - 1].destination
+}, { deep: true })
+
+// Trechos no modal de detalhe
+const showLegForm = ref(false)
+const legSaving = ref(false)
+const editingLeg = ref(null)
+const legForm = ref({ origin: '', destination: '', departure_date: '', arrival_date: '', km_start: '', km_end: '', cargo: '', obs: '', client: '', freight_value: '', freight_status: 'a_receber' })
+
+function openAddLeg() {
+  editingLeg.value = null
+  const legs = detailTrip.value?.legs || []
+  const lastDest = legs.length ? legs[legs.length - 1].destination : (detailTrip.value?.origin || '')
+  legForm.value = { origin: lastDest, destination: '', departure_date: '', arrival_date: '', km_start: '', km_end: '', cargo: '', obs: '', client: '', freight_value: '', freight_status: 'a_receber' }
+  showLegForm.value = true
+}
+
+function openEditLeg(leg) {
+  editingLeg.value = leg
+  legForm.value = {
+    origin: leg.origin,
+    destination: leg.destination,
+    departure_date: leg.departure_date?.split('T')[0] || leg.departure_date || '',
+    arrival_date: leg.arrival_date?.split('T')[0] || leg.arrival_date || '',
+    km_start: leg.km_start || '',
+    km_end: leg.km_end || '',
+    cargo: leg.cargo || '',
+    obs: leg.obs || '',
+    client: leg.client || '',
+    freight_value: leg.freight_value > 0 ? leg.freight_value : '',
+    freight_status: leg.freight_status || 'a_receber',
+  }
+  showLegForm.value = true
+}
+
+async function saveLeg() {
+  if (!legForm.value.origin || !legForm.value.destination) return
+  legSaving.value = true
+  try {
+    const fv = legForm.value.freight_value ? Number(legForm.value.freight_value) : 0
+    const data = {
+      origin: legForm.value.origin,
+      destination: legForm.value.destination,
+      departure_date: legForm.value.departure_date || null,
+      arrival_date: legForm.value.arrival_date || null,
+      km_start: legForm.value.km_start ? Number(legForm.value.km_start) : null,
+      km_end: legForm.value.km_end ? Number(legForm.value.km_end) : null,
+      cargo: legForm.value.cargo || null,
+      obs: legForm.value.obs || null,
+      client: legForm.value.client || null,
+      freight_value: fv,
+      freight_status: fv > 0 ? legForm.value.freight_status : 'sem_frete',
+    }
+    if (editingLeg.value) {
+      await updateLeg(detailTrip.value.id, editingLeg.value.id, data)
+    } else {
+      await addLeg(detailTrip.value.id, data)
+    }
+    detailTrip.value = await fetchOne(detailTrip.value.id)
+    showLegForm.value = false
+    editingLeg.value = null
+  } catch (e) {
+    props.showToast?.('❌ Erro ao salvar trecho')
+  } finally {
+    legSaving.value = false
+  }
+}
+
+async function deleteLeg(leg) {
+  if (!confirm(`Remover trecho "${leg.origin} → ${leg.destination}"?`)) return
+  try {
+    await removeLeg(detailTrip.value.id, leg.id)
+    detailTrip.value = await fetchOne(detailTrip.value.id)
+  } catch {
+    props.showToast?.('❌ Erro ao remover trecho')
+  }
+}
+
 const trucks = computed(() => vehicles.value.filter(v => v.type === 'truck'))
 const trailers = computed(() => vehicles.value.filter(v => v.type === 'trailer'))
 
@@ -74,10 +172,12 @@ function openNew() {
   editingId.value = null
   formError.value = ''
   form.value = emptyForm()
+  formLegs.value = []
+  deletedLegIds.value = []
   showForm.value = true
 }
 
-function openEdit(trip) {
+async function openEdit(trip) {
   editingId.value = trip.id
   formError.value = ''
   form.value = {
@@ -96,7 +196,21 @@ function openEdit(trip) {
     freight_status: trip.freight_status !== 'sem_frete' ? trip.freight_status : 'a_receber',
     obs:            trip.obs || '',
   }
+  formLegs.value = []
+  deletedLegIds.value = []
   showForm.value = true
+  try {
+    const full = await fetchOne(trip.id)
+    formLegs.value = (full.legs || []).map(l => ({
+      _key: l.id,
+      id: l.id,
+      origin: l.origin,
+      destination: l.destination,
+      client: l.client || '',
+      freight_value: l.freight_value > 0 ? l.freight_value : '',
+      freight_status: l.freight_status || 'a_receber',
+    }))
+  } catch {}
 }
 
 async function submitForm() {
@@ -120,12 +234,34 @@ async function submitForm() {
       freight_status: form.value.freight_value ? form.value.freight_status : 'sem_frete',
       obs:            form.value.obs || null,
     }
+    let tripId
     if (editingId.value) {
       await update(editingId.value, data)
+      tripId = editingId.value
       props.showToast?.('Viagem atualizada')
     } else {
-      await create(data)
+      const res = await create(data)
+      tripId = res.id
       props.showToast?.('Viagem registrada')
+    }
+    // Sincroniza trechos
+    for (const legId of deletedLegIds.value) {
+      await removeLeg(tripId, legId)
+    }
+    for (const leg of formLegs.value) {
+      const fv = leg.freight_value ? Number(leg.freight_value) : 0
+      const legData = {
+        origin: leg.origin,
+        destination: leg.destination,
+        client: leg.client || null,
+        freight_value: fv,
+        freight_status: fv > 0 ? leg.freight_status : 'sem_frete',
+      }
+      if (leg.id) {
+        await updateLeg(tripId, leg.id, legData)
+      } else if (leg.origin && leg.destination) {
+        await addLeg(tripId, legData)
+      }
     }
     await fetchAll()
     await fetchSummary()
@@ -398,6 +534,62 @@ onMounted(() => {
               </div>
             </div>
 
+            <!-- Seção: Trechos -->
+            <div>
+              <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <span class="h-px flex-1 bg-slate-100" />
+                Trechos
+                <span class="h-px flex-1 bg-slate-100" />
+              </div>
+              <p v-if="formLegs.length" class="text-[10px] text-blue-600 bg-blue-50 rounded px-2 py-1 mb-3">
+                O frete total da viagem será calculado pela soma dos fretes dos trechos.
+              </p>
+              <div v-if="formLegs.length" class="space-y-2 mb-3">
+                <div v-for="(leg, i) in formLegs" :key="leg._key" class="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-slate-500 uppercase">Trecho {{ i + 1 }}</span>
+                    <button type="button" @click="removeFormLeg(i)" class="text-slate-400 hover:text-red-600 p-0.5">
+                      <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    </button>
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label class="flabel">De *</label>
+                      <input v-model="leg.origin" placeholder="Ex: Rio Branco/AC" class="finput" />
+                    </div>
+                    <div>
+                      <label class="flabel">Para *</label>
+                      <input v-model="leg.destination" placeholder="Ex: São Paulo/SP" class="finput" />
+                    </div>
+                    <div>
+                      <label class="flabel">Cliente</label>
+                      <input v-model="leg.client" placeholder="Nome do cliente" class="finput" />
+                    </div>
+                    <div>
+                      <label class="flabel">Frete (R$)</label>
+                      <input v-model="leg.freight_value" type="number" min="0" step="0.01" placeholder="0,00" class="finput" />
+                    </div>
+                  </div>
+                  <div v-if="Number(leg.freight_value) > 0" class="mt-2 flex gap-2">
+                    <button type="button" @click="leg.freight_status = 'a_receber'"
+                      class="flex-1 py-1 rounded-lg text-xs font-bold border transition"
+                      :class="leg.freight_status === 'a_receber' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-500 border-slate-200'"
+                    >A Receber</button>
+                    <button type="button" @click="leg.freight_status = 'pago'"
+                      class="flex-1 py-1 rounded-lg text-xs font-bold border transition"
+                      :class="leg.freight_status === 'pago' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-slate-500 border-slate-200'"
+                    >Pago</button>
+                  </div>
+                </div>
+              </div>
+              <button type="button" @click="addFormLeg"
+                class="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-500 hover:border-blue-400 hover:text-blue-600 transition flex items-center justify-center gap-1.5"
+              >
+                <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M19 13H13v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                Adicionar Trecho
+              </button>
+            </div>
+
             <!-- Observações -->
             <div>
               <label class="flabel">Observações</label>
@@ -444,6 +636,152 @@ onMounted(() => {
             </div>
 
             <div class="p-6">
+
+              <!-- ── Trechos da Rota ── -->
+              <div class="mb-5">
+                <div class="flex items-center justify-between mb-3">
+                  <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                    <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/></svg>
+                    Trechos da Rota
+                    <span class="text-[10px] font-normal text-slate-400">({{ detailTrip.legs?.length || 0 }} trechos)</span>
+                  </h4>
+                  <button @click="openAddLeg" class="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg font-semibold transition-colors">
+                    <svg width="11" height="11" fill="currentColor" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                    Novo Trecho
+                  </button>
+                </div>
+
+                <!-- Timeline de trechos -->
+                <div v-if="detailTrip.legs?.length" class="relative">
+                  <!-- Linha vertical conectora -->
+                  <div class="absolute left-[11px] top-5 bottom-5 w-0.5 bg-slate-200" />
+                  <div class="space-y-0">
+                    <!-- Ponto de origem -->
+                    <div class="flex items-start gap-3 mb-1">
+                      <div class="w-6 h-6 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center z-10">
+                        <div class="w-2 h-2 rounded-full bg-white" />
+                      </div>
+                      <div class="pt-0.5">
+                        <div class="text-xs font-bold text-blue-700">{{ detailTrip.origin }}</div>
+                        <div class="text-[10px] text-slate-400">Saída · {{ detailTrip.start_date ? fmtDate(detailTrip.start_date) : '—' }}</div>
+                      </div>
+                    </div>
+
+                    <!-- Cada trecho -->
+                    <div v-for="(leg, i) in detailTrip.legs" :key="leg.id" class="flex items-start gap-3 mb-1">
+                      <div class="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center z-10 mt-0.5"
+                        :class="i === detailTrip.legs.length - 1 && leg.destination === detailTrip.origin ? 'bg-green-500' : 'bg-slate-400'"
+                      >
+                        <div class="w-2 h-2 rounded-full bg-white" />
+                      </div>
+                      <div class="flex-1 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
+                        <div class="flex items-center justify-between">
+                          <div class="flex-1 min-w-0">
+                            <div class="text-xs font-bold text-slate-800">→ {{ leg.destination }}</div>
+                            <div class="text-[10px] text-slate-400 mt-0.5">
+                              <span v-if="leg.departure_date">Saída {{ fmtDate(leg.departure_date) }}</span>
+                              <span v-if="leg.arrival_date"> · Chegada {{ fmtDate(leg.arrival_date) }}</span>
+                              <span v-if="leg.cargo"> · {{ leg.cargo }}</span>
+                              <span v-if="leg.km_start && leg.km_end"> · {{ (Number(leg.km_end) - Number(leg.km_start)).toLocaleString('pt-BR') }} km</span>
+                            </div>
+                            <div v-if="leg.freight_value > 0" class="mt-1 flex items-center gap-1.5 flex-wrap">
+                              <span class="text-[10px] font-extrabold text-slate-700">R$ {{ fmt(leg.freight_value) }}</span>
+                              <span v-if="leg.client" class="text-[10px] text-slate-500">· {{ leg.client }}</span>
+                              <span
+                                class="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                                :class="leg.freight_status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'"
+                              >{{ leg.freight_status === 'pago' ? 'Pago' : 'A receber' }}</span>
+                            </div>
+                          </div>
+                          <div class="flex gap-1 ml-2">
+                            <button @click="openEditLeg(leg)" class="text-slate-400 hover:text-blue-600 p-1" title="Editar trecho">
+                              <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                            </button>
+                            <button @click="deleteLeg(leg)" class="text-slate-400 hover:text-red-600 p-1" title="Remover trecho">
+                              <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="text-center py-4 text-xs text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                  Nenhum trecho adicionado. Clique em "Novo Trecho" para registrar o percurso.
+                </div>
+
+                <!-- Form de trecho inline -->
+                <div v-if="showLegForm" class="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <div class="text-xs font-bold text-blue-700 mb-3">{{ editingLeg ? 'Editar Trecho' : 'Adicionar Trecho' }}</div>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label class="flabel">De (origem) *</label>
+                      <input v-model="legForm.origin" placeholder="Ex: São Paulo/SP" class="finput" />
+                    </div>
+                    <div>
+                      <label class="flabel">Para (destino) *</label>
+                      <input v-model="legForm.destination" placeholder="Ex: Florianópolis/SC" class="finput" />
+                    </div>
+                    <div>
+                      <label class="flabel">Data de Saída</label>
+                      <input v-model="legForm.departure_date" type="date" class="finput" />
+                    </div>
+                    <div>
+                      <label class="flabel">Data de Chegada</label>
+                      <input v-model="legForm.arrival_date" type="date" class="finput" />
+                    </div>
+                    <div>
+                      <label class="flabel">KM Saída</label>
+                      <input v-model="legForm.km_start" type="number" placeholder="0" class="finput" />
+                    </div>
+                    <div>
+                      <label class="flabel">KM Chegada</label>
+                      <input v-model="legForm.km_end" type="number" placeholder="0" class="finput" />
+                    </div>
+                    <div>
+                      <label class="flabel">Carga</label>
+                      <input v-model="legForm.cargo" placeholder="Ex: Cimento" class="finput" />
+                    </div>
+                    <div>
+                      <label class="flabel">Obs</label>
+                      <input v-model="legForm.obs" placeholder="Informações adicionais" class="finput" />
+                    </div>
+                    <div>
+                      <label class="flabel">Cliente (frete)</label>
+                      <input v-model="legForm.client" placeholder="Ex: Empresa XYZ" class="finput" />
+                    </div>
+                    <div>
+                      <label class="flabel">Valor do Frete (R$)</label>
+                      <input v-model="legForm.freight_value" type="number" min="0" step="0.01" placeholder="0,00" class="finput" />
+                    </div>
+                  </div>
+                  <div v-if="Number(legForm.freight_value) > 0" class="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      @click="legForm.freight_status = 'a_receber'"
+                      class="flex-1 py-1.5 rounded-lg text-xs font-bold border transition"
+                      :class="legForm.freight_status === 'a_receber' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-500 border-slate-200'"
+                    >A Receber</button>
+                    <button
+                      type="button"
+                      @click="legForm.freight_status = 'pago'"
+                      class="flex-1 py-1.5 rounded-lg text-xs font-bold border transition"
+                      :class="legForm.freight_status === 'pago' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-slate-500 border-slate-200'"
+                    >Pago</button>
+                  </div>
+                  <div class="flex gap-2 mt-3">
+                    <button @click="showLegForm = false; editingLeg = null" class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-500">Cancelar</button>
+                    <button
+                      @click="saveLeg"
+                      :disabled="!legForm.origin || !legForm.destination || legSaving"
+                      class="btn-p !py-1.5 !px-4 !text-xs"
+                    >
+                      {{ legSaving ? 'Salvando...' : (editingLeg ? 'Salvar Trecho' : 'Adicionar Trecho') }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <!-- KPIs da viagem -->
               <div class="grid grid-cols-4 gap-3 mb-5">
                 <div class="bg-slate-50 rounded-lg p-3 text-center">
@@ -457,16 +795,26 @@ onMounted(() => {
                   </div>
                 </div>
                 <div class="bg-slate-50 rounded-lg p-3 text-center">
-                  <div class="text-[10px] font-bold text-slate-500 uppercase mb-1">Frete</div>
-                  <div class="text-lg font-extrabold text-slate-900">
-                    {{ detailTrip.freight_value > 0 ? 'R$ ' + fmt(detailTrip.freight_value) : '—' }}
+                  <div class="text-[10px] font-bold text-slate-500 uppercase mb-1">
+                    Frete<span v-if="detailTrip.legs?.length" class="ml-1 text-blue-500">({{ detailTrip.legs.length }} trechos)</span>
                   </div>
-                  <span v-if="detailTrip.freight_value > 0"
-                    class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                    :class="detailTrip.freight_status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'"
-                  >
-                    {{ detailTrip.freight_status === 'pago' ? 'Recebido' : 'A receber' }}
-                  </span>
+                  <div class="text-lg font-extrabold text-slate-900">
+                    {{ detailTrip.revenue > 0 ? 'R$ ' + fmt(detailTrip.revenue) : '—' }}
+                  </div>
+                  <template v-if="detailTrip.legs?.length">
+                    <span v-if="detailTrip.legs_freight_pending > 0" class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 mr-1">
+                      A receber R$ {{ fmt(detailTrip.legs_freight_pending) }}
+                    </span>
+                    <span v-if="detailTrip.legs_freight_received > 0" class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                      Pago R$ {{ fmt(detailTrip.legs_freight_received) }}
+                    </span>
+                  </template>
+                  <template v-else-if="detailTrip.freight_value > 0">
+                    <span
+                      class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                      :class="detailTrip.freight_status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'"
+                    >{{ detailTrip.freight_status === 'pago' ? 'Recebido' : 'A receber' }}</span>
+                  </template>
                 </div>
                 <div class="rounded-lg p-3 text-center" :class="detailTrip.profit >= 0 ? 'bg-green-50' : 'bg-red-50'">
                   <div class="text-[10px] font-bold uppercase mb-1" :class="detailTrip.profit >= 0 ? 'text-green-700' : 'text-red-700'">Lucro</div>
@@ -506,17 +854,26 @@ onMounted(() => {
                 <div>
                   <h4 class="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
                     Despesas
-                    <span class="text-[10px] font-normal text-slate-400">({{ detailTrip.expenses?.length || 0 }} registros)</span>
+                    <span class="text-[10px] font-normal text-slate-400">({{ detailTrip.payable_expenses?.length || 0 }} registros)</span>
                   </h4>
-                  <div v-if="detailTrip.expenses?.length" class="space-y-1.5 max-h-[180px] overflow-y-auto">
-                    <div v-for="e in detailTrip.expenses" :key="e.id" class="flex justify-between text-xs bg-slate-50 rounded px-3 py-2">
-                      <span class="text-slate-600">{{ fmtDate(e.exp_date) }} — {{ e.description || e.type }}</span>
-                      <span class="font-bold text-slate-700">R$ {{ fmt(e.value * e.qty) }}</span>
+                  <div v-if="detailTrip.payable_expenses?.length" class="space-y-1.5 max-h-[180px] overflow-y-auto">
+                    <div v-for="e in detailTrip.payable_expenses" :key="e.id"
+                      class="flex justify-between items-center text-xs bg-orange-50 border border-orange-100 rounded px-3 py-2">
+                      <div>
+                        <span class="font-medium text-slate-700">{{ e.description || e.category }}</span>
+                        <span class="text-slate-400 ml-1">· {{ e.driver_name || '—' }}</span>
+                      </div>
+                      <div class="text-right">
+                        <div class="font-bold text-slate-800">R$ {{ fmt(e.value) }}</div>
+                        <div class="text-[10px]" :class="e.status === 'pago' ? 'text-green-600' : 'text-amber-600'">
+                          {{ e.status === 'pago' ? 'Pago' : 'Pendente' }}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div v-else class="text-xs text-slate-400 py-2">Nenhuma despesa no período</div>
-                  <div v-if="detailTrip.expenses_total > 0" class="text-xs font-extrabold text-slate-900 mt-2 text-right">
-                    Total: R$ {{ fmt(detailTrip.expenses_total) }}
+                  <div v-else class="text-xs text-slate-400 py-2">Nenhuma despesa lançada</div>
+                  <div v-if="detailTrip.payable_expenses_total > 0" class="text-xs font-extrabold text-slate-900 mt-2 text-right">
+                    Total: R$ {{ fmt(detailTrip.payable_expenses_total) }}
                   </div>
                 </div>
               </div>

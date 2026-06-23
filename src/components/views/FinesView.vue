@@ -4,7 +4,7 @@ import { useFines } from '../../composables/useFines'
 import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
 
-const { items, summary, loading, descriptions, fetchAll, fetchSummary, fetchDescriptions, create, markPaid, markAppeal, remove } = useFines()
+const { items, summary, loading, descriptions, fetchAll, fetchSummary, fetchDescriptions, create, update, markPaid, markAppeal, remove } = useFines()
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
 const { vehicles, fetchAll: fetchVehicles } = useVehicles()
 
@@ -13,6 +13,8 @@ const descriptionFilter = ref('')
 const showModal = ref(false)
 const saving = ref(false)
 const formError = ref('')
+const editingId = ref(null)
+const viewingFine = ref(null)
 
 const form = ref({
   driver_id: '',
@@ -60,12 +62,29 @@ const filtered = computed(() => {
 const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 function resetForm() {
+  editingId.value = null
   form.value = {
     driver_id: '', vehicle_plate: '', value: '',
     fine_date: new Date().toISOString().split('T')[0],
     due_date: '', description: '', category: 'outros', obs: '',
   }
   formError.value = ''
+}
+
+function openEdit(f) {
+  editingId.value = f.id
+  form.value = {
+    driver_id: f.driver_id || '',
+    vehicle_plate: f.vehicle_plate || '',
+    value: f.value,
+    fine_date: f.fine_date?.split('T')[0] || '',
+    due_date: f.due_date?.split('T')[0] || '',
+    description: f.description || '',
+    category: f.category || 'outros',
+    obs: f.obs || '',
+  }
+  formError.value = ''
+  showModal.value = true
 }
 
 // Ao selecionar motorista, auto-preenche placa do cavalo
@@ -80,11 +99,12 @@ async function submit() {
   saving.value = true
   formError.value = ''
   try {
-    await create({
-      ...form.value,
-      driver_id: form.value.driver_id || null,
-      value: Number(form.value.value),
-    })
+    const data = { ...form.value, driver_id: form.value.driver_id || null, value: Number(form.value.value) }
+    if (editingId.value) {
+      await update(editingId.value, data)
+    } else {
+      await create(data)
+    }
     showModal.value = false
     resetForm()
   } catch (e) {
@@ -169,7 +189,7 @@ onMounted(async () => {
     <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
       <div v-if="loading" class="text-center text-slate-400 text-xs py-10">Carregando...</div>
       <template v-else>
-        <div class="grid grid-cols-[1.5fr_1fr_1fr_110px_120px_110px_130px] gap-2 px-[18px] py-2.5 bg-slate-50 border-b border-slate-200">
+        <div class="grid grid-cols-[1.5fr_1fr_1fr_110px_120px_110px_160px] gap-2 px-[18px] py-2.5 bg-slate-50 border-b border-slate-200">
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Motorista</div>
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Placa</div>
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Infração</div>
@@ -182,7 +202,7 @@ onMounted(async () => {
         <div
           v-for="f in filtered"
           :key="f.id"
-          class="grid grid-cols-[1.5fr_1fr_1fr_110px_120px_110px_130px] gap-2 px-[18px] py-3 border-b border-slate-50 items-center"
+          class="grid grid-cols-[1.5fr_1fr_1fr_110px_120px_110px_160px] gap-2 px-[18px] py-3 border-b border-slate-50 items-center"
         >
           <!-- Motorista -->
           <div class="flex items-center gap-2">
@@ -227,7 +247,21 @@ onMounted(async () => {
           </div>
 
           <!-- Ações -->
-          <div class="flex items-center gap-1.5">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <button
+              @click.stop="viewingFine = f"
+              title="Visualizar"
+              class="text-slate-500 bg-slate-100 hover:bg-slate-200 px-1.5 py-1 rounded-md transition-colors"
+            >
+              <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            </button>
+            <button
+              @click.stop="openEdit(f)"
+              title="Editar"
+              class="text-[10.5px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-1.5 py-1 rounded-md transition-colors"
+            >
+              <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+            </button>
             <button
               v-if="f.status === 'pendente'"
               @click="pay(f)"
@@ -260,7 +294,7 @@ onMounted(async () => {
         <div class="absolute inset-0 bg-black/40" @click="showModal = false; resetForm()" />
         <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg z-10 max-h-[90vh] overflow-y-auto">
           <div class="flex items-center justify-between p-5 border-b border-slate-100">
-            <h3 class="text-base font-bold text-slate-900 m-0">Lançar Multa</h3>
+            <h3 class="text-base font-bold text-slate-900 m-0">{{ editingId ? 'Editar Multa' : 'Lançar Multa' }}</h3>
             <button @click="showModal = false; resetForm()" class="text-slate-400 hover:text-slate-600">
               <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
@@ -371,8 +405,71 @@ onMounted(async () => {
               :disabled="saving"
               class="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-bold py-2.5 rounded-lg transition-colors"
             >
-              {{ saving ? 'Salvando...' : 'Registrar Multa' }}
+              {{ saving ? 'Salvando...' : editingId ? 'Salvar Alterações' : 'Registrar Multa' }}
             </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Modal Visualizar Multa -->
+    <Teleport to="body">
+      <div v-if="viewingFine" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="viewingFine = null">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="viewingFine = null" />
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-[520px] overflow-hidden">
+          <div class="px-7 py-5 bg-gradient-to-br from-[#1a1f2e] to-[#1e293b] flex items-center justify-between">
+            <div>
+              <h3 class="m-0 text-[15px] font-bold text-white">Detalhes da Multa</h3>
+              <p class="mt-0.5 mb-0 text-xs text-slate-400">#{{ viewingFine.id }} — somente leitura</p>
+            </div>
+            <button @click="viewingFine = null" class="text-slate-400 hover:text-white transition-colors">
+              <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+          </div>
+          <div class="px-7 py-6 grid grid-cols-2 gap-4">
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Motorista</div>
+              <div class="text-sm font-semibold text-slate-800">{{ viewingFine.driver_name || '—' }}</div>
+            </div>
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Placa</div>
+              <div class="text-sm font-semibold text-slate-800 font-mono">{{ viewingFine.vehicle_plate || '—' }}</div>
+            </div>
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Categoria</div>
+              <span class="text-xs font-bold px-2 py-1 rounded-full" :class="CATEGORY_COLORS[viewingFine.category] || 'bg-slate-100 text-slate-600'">
+                {{ CATEGORIES.find(c => c.value === viewingFine.category)?.label || viewingFine.category }}
+              </span>
+            </div>
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status</div>
+              <span class="text-xs font-bold px-2 py-1 rounded-full capitalize" :class="STATUS_COLORS[viewingFine.status] || 'bg-slate-100 text-slate-600'">
+                {{ viewingFine.status }}
+              </span>
+            </div>
+            <div class="col-span-2">
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Infração</div>
+              <div class="text-sm text-slate-800">{{ viewingFine.description || '—' }}</div>
+            </div>
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Valor</div>
+              <div class="text-lg font-extrabold text-red-600">{{ fmt(viewingFine.value) }}</div>
+            </div>
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Data da Infração</div>
+              <div class="text-sm font-semibold text-slate-800">{{ viewingFine.fine_date ? new Date(viewingFine.fine_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—' }}</div>
+            </div>
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Vencimento</div>
+              <div class="text-sm font-semibold text-slate-800">{{ viewingFine.due_date ? new Date(viewingFine.due_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—' }}</div>
+            </div>
+            <div v-if="viewingFine.obs" class="col-span-2">
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Observação</div>
+              <div class="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 border border-slate-100">{{ viewingFine.obs }}</div>
+            </div>
+          </div>
+          <div class="px-7 py-4 border-t border-slate-100 flex justify-end">
+            <button @click="viewingFine = null" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition-colors">Fechar</button>
           </div>
         </div>
       </div>

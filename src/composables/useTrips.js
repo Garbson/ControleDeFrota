@@ -46,5 +46,17 @@ export function useTrips() {
     await fetchSummary()
   }
 
-  return { items, summary, loading, fetchAll, fetchOne, fetchSummary, create, update, remove }
+  async function addLeg(tripId, data) {
+    return api.post(`/trips/${tripId}/legs`, data)
+  }
+
+  async function updateLeg(tripId, legId, data) {
+    return api.put(`/trips/${tripId}/legs/${legId}`, data)
+  }
+
+  async function removeLeg(tripId, legId) {
+    return api.delete(`/trips/${tripId}/legs/${legId}`)
+  }
+
+  return { items, summary, loading, fetchAll, fetchOne, fetchSummary, create, update, remove, addLeg, updateLeg, removeLeg }
 }

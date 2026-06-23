@@ -6,15 +6,31 @@ import KPICard from '../ui/KPICard.vue'
 
 const props = defineProps({ showToast: Function })
 
-const { records, loading, fetchAll, create } = useFuel()
+const { records, loading, fetchAll, create, update } = useFuel()
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
 
 const fuelSort = ref('data-desc')
 const showFuelForm = ref(false)
+const editingFuel = ref(null)
+const viewingFuel = ref(null)
 
 const fuelForm = ref({
   driver_id: '', vehicle_id: '', liters: '', price_liter: '', station: '', fuel_date: '', obs: ''
 })
+
+function openEditFuel(f) {
+  editingFuel.value = f
+  fuelForm.value = {
+    driver_id: f.driver_id || '',
+    vehicle_id: f.vehicle_id || '',
+    liters: f.liters,
+    price_liter: f.price_liter,
+    station: f.station || '',
+    fuel_date: f.fuel_date?.split('T')[0] || f.fuel_date || '',
+    obs: f.obs || '',
+  }
+  showFuelForm.value = true
+}
 
 const sortedRecords = computed(() => {
   const list = [...records.value]
@@ -43,7 +59,7 @@ const formValid = computed(() =>
 async function submitFuel() {
   if (!formValid.value) return
   try {
-    await create({
+    const data = {
       driver_id: fuelForm.value.driver_id || null,
       vehicle_id: fuelForm.value.vehicle_id || null,
       liters: Number(fuelForm.value.liters),
@@ -51,13 +67,20 @@ async function submitFuel() {
       station: fuelForm.value.station || null,
       fuel_date: fuelForm.value.fuel_date,
       obs: fuelForm.value.obs || null,
-    })
-    const d = drivers.value.find(dr => dr.id == fuelForm.value.driver_id)
-    props.showToast?.(`⛽ Abastecimento registrado para ${d?.name || 'motorista'}`)
+    }
+    if (editingFuel.value) {
+      await update(editingFuel.value.id, data)
+      props.showToast?.('✅ Abastecimento atualizado')
+    } else {
+      await create(data)
+      const d = drivers.value.find(dr => dr.id == fuelForm.value.driver_id)
+      props.showToast?.(`⛽ Abastecimento registrado para ${d?.name || 'motorista'}`)
+    }
     showFuelForm.value = false
+    editingFuel.value = null
     fuelForm.value = { driver_id: '', vehicle_id: '', liters: '', price_liter: '', station: '', fuel_date: '', obs: '' }
   } catch (e) {
-    props.showToast?.('❌ Erro ao registrar abastecimento')
+    props.showToast?.('❌ Erro ao salvar abastecimento')
   }
 }
 
@@ -108,6 +131,7 @@ onMounted(() => {
             <th class="th">Preço/L</th>
             <th class="th">Total</th>
             <th class="th">Posto</th>
+            <th class="th" style="text-align:center">Ações</th>
           </tr>
         </thead>
         <tbody>
@@ -122,6 +146,24 @@ onMounted(() => {
             <td class="td text-slate-500">R$ {{ Number(f.price_liter).toFixed(2) }}</td>
             <td class="td font-extrabold text-slate-900">R$ {{ fmt(f.total) }}</td>
             <td class="td text-xs text-slate-500 max-w-[180px] truncate">{{ f.station || '—' }}</td>
+            <td class="td text-center">
+              <div class="flex items-center justify-center gap-1.5">
+                <button
+                  @click="viewingFuel = f"
+                  title="Visualizar"
+                  class="text-slate-500 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-md transition-colors inline-flex"
+                >
+                  <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                </button>
+                <button
+                  @click="openEditFuel(f)"
+                  title="Editar"
+                  class="text-blue-600 bg-blue-50 hover:bg-blue-100 p-1.5 rounded-md transition-colors inline-flex"
+                >
+                  <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                </button>
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -130,10 +172,10 @@ onMounted(() => {
 
     <!-- Modal Form -->
     <Teleport to="body">
-      <div v-if="showFuelForm" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" @click.self="showFuelForm = false">
+      <div v-if="showFuelForm" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" @click.self="showFuelForm = false; editingFuel = null">
         <div class="bg-white rounded-xl w-[480px] max-h-[90vh] overflow-y-auto shadow-2xl">
           <div class="bg-gradient-to-br from-[#1a1f2e] to-[#1e293b] px-6 py-5 rounded-t-xl">
-            <h3 class="m-0 text-[15px] font-bold text-white">⛽ Novo Abastecimento</h3>
+            <h3 class="m-0 text-[15px] font-bold text-white">⛽ {{ editingFuel ? 'Editar Abastecimento' : 'Novo Abastecimento' }}</h3>
             <p class="mt-1 mb-0 text-xs text-slate-400">Registre o abastecimento por motorista e veículo</p>
           </div>
           <div class="p-6">
@@ -167,9 +209,64 @@ onMounted(() => {
               </div>
             </div>
             <div class="mt-5 pt-4 border-t border-slate-50 flex justify-between items-center">
-              <button @click="showFuelForm = false" class="px-4 py-2 bg-transparent border border-slate-200 rounded-lg text-slate-500 text-xs font-semibold cursor-pointer">Cancelar</button>
-              <button @click="submitFuel" class="btn-p" :disabled="!formValid">Salvar Abastecimento</button>
+              <button @click="showFuelForm = false; editingFuel = null" class="px-4 py-2 bg-transparent border border-slate-200 rounded-lg text-slate-500 text-xs font-semibold cursor-pointer">Cancelar</button>
+              <button @click="submitFuel" class="btn-p" :disabled="!formValid">{{ editingFuel ? 'Salvar Alterações' : 'Salvar Abastecimento' }}</button>
             </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Modal Visualizar Abastecimento -->
+    <Teleport to="body">
+      <div v-if="viewingFuel" class="fixed inset-0 z-[110] flex items-center justify-center p-4" @click.self="viewingFuel = null">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="viewingFuel = null" />
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-[500px] overflow-hidden">
+          <div class="px-7 py-5 bg-gradient-to-br from-[#1a1f2e] to-[#1e293b] flex items-center justify-between">
+            <div>
+              <h3 class="m-0 text-[15px] font-bold text-white">⛽ Detalhes do Abastecimento</h3>
+              <p class="mt-0.5 mb-0 text-xs text-slate-400">#{{ viewingFuel.id }} — somente leitura</p>
+            </div>
+            <button @click="viewingFuel = null" class="text-slate-400 hover:text-white transition-colors">
+              <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+          </div>
+          <div class="px-7 py-6 grid grid-cols-2 gap-4">
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Data</div>
+              <div class="text-sm font-semibold text-slate-800">{{ viewingFuel.fuel_date ? new Date(viewingFuel.fuel_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—' }}</div>
+            </div>
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Motorista</div>
+              <div class="text-sm font-semibold text-slate-800">{{ viewingFuel.driver_name || '—' }}</div>
+            </div>
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Placa</div>
+              <div class="text-sm font-mono font-bold text-blue-800">{{ viewingFuel.vehicle_plate || '—' }}</div>
+            </div>
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Posto</div>
+              <div class="text-sm font-semibold text-slate-800">{{ viewingFuel.station || '—' }}</div>
+            </div>
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Litros</div>
+              <div class="text-lg font-extrabold text-slate-900">{{ Number(viewingFuel.liters).toFixed(2) }} L</div>
+            </div>
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Preço / L</div>
+              <div class="text-sm font-semibold text-slate-800">R$ {{ Number(viewingFuel.price_liter).toFixed(3) }}</div>
+            </div>
+            <div class="col-span-2">
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total</div>
+              <div class="text-2xl font-extrabold text-amber-600">R$ {{ fmt(viewingFuel.total) }}</div>
+            </div>
+            <div v-if="viewingFuel.obs" class="col-span-2">
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Observação</div>
+              <div class="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 border border-slate-100">{{ viewingFuel.obs }}</div>
+            </div>
+          </div>
+          <div class="px-7 py-4 border-t border-slate-100 flex justify-end">
+            <button @click="viewingFuel = null" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition-colors">Fechar</button>
           </div>
         </div>
       </div>

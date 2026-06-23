@@ -1,9 +1,9 @@
 <script setup>
 defineProps({
   label: String,
-  bg: { type: String, default: '#dbeafe' },
-  textColor: { type: String, default: '#1d4ed8' },
-})
+  bg: { type: String, default: "#dbeafe" },
+  textColor: { type: String, default: "#1d4ed8" },
+});
 </script>
 
 <template>

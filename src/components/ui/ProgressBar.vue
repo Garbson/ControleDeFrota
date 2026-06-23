@@ -2,8 +2,8 @@
 defineProps({
   value: { type: Number, default: 0 },
   max: { type: Number, default: 100 },
-  color: { type: String, default: '#2563eb' },
-})
+  color: { type: String, default: "#2563eb" },
+});
 </script>
 
 <template>

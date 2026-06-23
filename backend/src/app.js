@@ -18,8 +18,12 @@ const fuelRoutes      = require('./routes/fuel')
 const dashboardRoutes = require('./routes/dashboard')
 const finesRoutes     = require('./routes/fines')
 const tripsRoutes     = require('./routes/trips')
+const usersRoutes     = require('./routes/users')
 
 const app = express()
+
+// Necessário quando atrás de proxy reverso (nginx/Dokploy)
+app.set('trust proxy', 1)
 
 // ── Segurança
 app.use(helmet())
@@ -62,6 +66,7 @@ app.use('/api/fuel',       fuelRoutes)
 app.use('/api/dashboard',  dashboardRoutes)
 app.use('/api/fines',      finesRoutes)
 app.use('/api/trips',      tripsRoutes)
+app.use('/api/users',      usersRoutes)
 
 // ── 404
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada' }))

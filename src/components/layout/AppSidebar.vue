@@ -7,6 +7,7 @@ const props = defineProps({ currentView: String })
 const emit = defineEmits(['navigate', 'logout'])
 
 const { user } = useAuth()
+const isAdmin = computed(() => user.value?.role === 'admin')
 
 const pendingCount = ref(0)
 
@@ -48,6 +49,12 @@ const menuSections = computed(() => [
       { id: 'report', label: 'Relatório Geral', icon: 'report' },
     ],
   },
+  ...(isAdmin.value ? [{
+    title: 'Administração',
+    items: [
+      { id: 'users', label: 'Usuários & Acessos', icon: 'users' },
+    ],
+  }] : []),
 ])
 
 const userInitial = computed(() => {
@@ -102,6 +109,7 @@ onMounted(() => loadPending())
           <svg v-else-if="item.icon === 'analytics'" width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
           <svg v-else-if="item.icon === 'nfs'" width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
           <svg v-else-if="item.icon === 'report'" width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+          <svg v-else-if="item.icon === 'users'" width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M12 1C8.14 1 5 4.14 5 8c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
 
           {{ item.label }}
 

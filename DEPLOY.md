@@ -1,12 +1,14 @@
 # Deploy — ControleDeFrota
 
 ## Pré-requisitos na VPS
+
 - Docker + Docker Compose ✅ (já instalados)
 - Rede `zlabs-nginx-proxy_default` existente ✅
 
 ## Passo a passo
 
 ### 1. Clonar / enviar arquivos
+
 ```bash
 # Na VPS
 mkdir -p /opt/apps/controlefrota
@@ -15,6 +17,7 @@ cd /opt/apps/controlefrota
 ```
 
 ### 2. Configurar variáveis de ambiente
+
 ```bash
 cp .env.example .env
 nano .env
@@ -22,17 +25,20 @@ nano .env
 ```
 
 Gerar chaves JWT seguras:
+
 ```bash
 openssl rand -base64 64  # JWT_SECRET
 openssl rand -base64 64  # JWT_REFRESH_SECRET
 ```
 
 ### 3. Build e subir containers
+
 ```bash
 docker compose up -d --build
 ```
 
 ### 4. Verificar saúde
+
 ```bash
 docker compose ps
 docker logs controlefrota-api --tail 20
@@ -40,6 +46,7 @@ curl http://localhost:4000/health
 ```
 
 ### 5. Configurar nginx reverso (zlabs-nginx-proxy)
+
 Adicionar ao config do nginx proxy existente:
 
 ```nginx
@@ -73,19 +80,23 @@ server {
 ```
 
 ### 6. Cloudflare DNS
+
 Adicionar registro A:
+
 - Nome: `controlefrota`
 - Tipo: A
 - IP: 72.60.157.155
 - Proxy: ✅ (laranja)
 
 ## Containers criados (isolados)
-| Container | Função | Rede interna | Porta externa |
-|-----------|--------|--------------|---------------|
-| controlefrota-mysql | Banco de dados MySQL 8.0 | controlefrota-network | 3310 (só debug) |
-| controlefrota-api | API Node.js Express | controlefrota-network + zlabs-proxy | — |
-| controlefrota-web | Frontend Vue (nginx) | controlefrota-network + zlabs-proxy | — |
+
+| Container           | Função                   | Rede interna                        | Porta externa   |
+| ------------------- | ------------------------ | ----------------------------------- | --------------- |
+| controlefrota-mysql | Banco de dados MySQL 8.0 | controlefrota-network               | 3310 (só debug) |
+| controlefrota-api   | API Node.js Express      | controlefrota-network + zlabs-proxy | —               |
+| controlefrota-web   | Frontend Vue (nginx)     | controlefrota-network + zlabs-proxy | —               |
 
 ## Credenciais iniciais
+
 - E-mail: `admin@controlefrota.com`
 - Senha: `Admin@2026` ← **Trocar imediatamente após primeiro login!**

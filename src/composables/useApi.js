@@ -75,7 +75,10 @@ async function request(path, options = {}) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error(err.error || err.message || 'Erro na requisição')
+    const msg = err.error || err.message
+      || (Array.isArray(err.errors) && err.errors[0]?.msg)
+      || 'Erro na requisição'
+    throw new Error(msg)
   }
 
   // 204 No Content

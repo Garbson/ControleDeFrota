@@ -35,7 +35,11 @@ router.get('/', async (req, res) => {
         d.name  AS driver_name,
         v2.plate AS truck_plate,
         v3.plate AS trailer_plate,
-        (CASE WHEN t.final_km > t.initial_km THEN t.final_km - t.initial_km ELSE 0 END) AS distance
+        (CASE WHEN t.final_km > t.initial_km THEN t.final_km - t.initial_km ELSE 0 END) AS distance,
+        COALESCE((SELECT SUM(freight_value) FROM trip_legs WHERE trip_id = t.id), 0) AS legs_freight_total,
+        COALESCE((SELECT SUM(freight_value) FROM trip_legs WHERE trip_id = t.id AND freight_status = 'pago'), 0) AS legs_freight_received,
+        COALESCE((SELECT SUM(freight_value) FROM trip_legs WHERE trip_id = t.id AND freight_status = 'a_receber'), 0) AS legs_freight_pending,
+        (SELECT COUNT(*) FROM trip_legs WHERE trip_id = t.id) AS legs_count
       FROM trips t
       JOIN  drivers  d  ON d.id  = t.driver_id
       LEFT JOIN vehicles v2 ON v2.id = t.truck_id
@@ -69,7 +73,10 @@ router.get('/', async (req, res) => {
       trip.fuel_liters     = Number(fuelRow.liters)
       trip.expenses_total  = Number(expRow.total)
       trip.total_cost      = trip.fuel_total + trip.expenses_total
-      trip.revenue         = Number(trip.freight_value || 0)
+      // Se tem trechos, receita vem da soma dos fretes dos trechos
+      trip.revenue = Number(trip.legs_count) > 0
+        ? Number(trip.legs_freight_total)
+        : Number(trip.freight_value || 0)
       trip.profit          = trip.revenue - trip.total_cost
       trip.avg_consumption = trip.fuel_liters > 0 && trip.distance > 0
         ? (trip.distance / trip.fuel_liters).toFixed(2)
@@ -124,6 +131,17 @@ router.get('/:id', async (req, res) => {
     )
     trip.expenses_total = trip.expenses.reduce((s, e) => s + (Number(e.value) * e.qty), 0)
 
+    // Contas a pagar vinculadas diretamente à viagem
+    trip.payable_expenses = await query(
+      `SELECT ap.*, d.name AS driver_name
+       FROM accounts_payable ap
+       LEFT JOIN drivers d ON d.id = ap.driver_id
+       WHERE ap.trip_id = ?
+       ORDER BY ap.due_date ASC`,
+      [trip.id]
+    )
+    trip.payable_expenses_total = trip.payable_expenses.reduce((s, e) => s + Number(e.value), 0)
+
     // Frete vinculado diretamente pelo receivable_id
     if (trip.receivable_id) {
       const [rec] = await query(
@@ -137,12 +155,23 @@ router.get('/:id', async (req, res) => {
       trip.receivable = null
     }
 
-    trip.total_cost      = trip.fuel_total + trip.expenses_total
+    trip.total_cost      = trip.fuel_total + trip.expenses_total + trip.payable_expenses_total
     trip.revenue         = Number(trip.freight_value || 0)
     trip.profit          = trip.revenue - trip.total_cost
     trip.avg_consumption = trip.fuel_liters > 0 && trip.distance > 0
       ? Number((trip.distance / trip.fuel_liters).toFixed(2))
       : null
+
+    trip.legs = await query(
+      'SELECT * FROM trip_legs WHERE trip_id = ? ORDER BY leg_order ASC, id ASC',
+      [trip.id]
+    )
+
+    // Se há trechos, receita = soma dos fretes dos trechos
+    if (trip.legs.length > 0) {
+      trip.revenue = trip.legs.reduce((s, l) => s + Number(l.freight_value || 0), 0)
+    }
+    trip.profit = trip.revenue - trip.total_cost
 
     res.json(trip)
   } catch (err) {
@@ -298,6 +327,172 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error('Delete trip error:', err)
     res.status(500).json({ error: 'Erro ao excluir viagem' })
+  }
+})
+
+// ── TRECHOS (legs) ──────────────────────────────────────
+
+// GET /api/trips/:id/legs
+router.get('/:id/legs', async (req, res) => {
+  try {
+    const legs = await query(
+      'SELECT * FROM trip_legs WHERE trip_id = ? ORDER BY leg_order ASC, id ASC',
+      [req.params.id]
+    )
+    res.json(legs)
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar trechos' })
+  }
+})
+
+// POST /api/trips/:id/legs
+router.post('/:id/legs', [
+  body('origin').notEmpty().withMessage('Origem obrigatória'),
+  body('destination').notEmpty().withMessage('Destino obrigatório'),
+], async (req, res) => {
+  const errors = validationResult(req)
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() })
+
+  const { origin, destination, departure_date, arrival_date, km_start, km_end, cargo, obs, client, freight_value, freight_status } = req.body
+  const fv     = Number(freight_value) || 0
+  const fstatus = fv > 0 ? (freight_status || 'a_receber') : 'sem_frete'
+
+  try {
+    const [last] = await query(
+      'SELECT COALESCE(MAX(leg_order), 0) AS max_order FROM trip_legs WHERE trip_id = ?',
+      [req.params.id]
+    )
+    const leg_order = (last?.max_order || 0) + 1
+
+    // Busca dados da viagem pai para vincular ao recebível
+    const [trip] = await query('SELECT * FROM trips WHERE id = ?', [req.params.id])
+
+    let receivable_id = null
+    if (fv > 0) {
+      const recStatus    = fstatus === 'pago' ? 'recebido' : 'pendente'
+      const receivedDate = fstatus === 'pago' ? (arrival_date || departure_date || trip.start_date) : null
+      const dueDate      = arrival_date || departure_date || trip.start_date
+
+      const recResult = await query(
+        `INSERT INTO accounts_receivable
+           (client, description, driver_id, vehicle_id, type, value, issue_date, due_date, received_date, status, obs)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          client || trip.client || null,
+          `Frete: ${origin} → ${destination}${cargo ? ' (' + cargo + ')' : ''}`,
+          trip.driver_id,
+          trip.truck_id || null,
+          'frete',
+          fv,
+          departure_date || trip.start_date,
+          dueDate,
+          receivedDate,
+          recStatus,
+          `Viagem #${req.params.id}`,
+        ]
+      )
+      receivable_id = recResult.insertId
+    }
+
+    const result = await query(
+      `INSERT INTO trip_legs
+         (trip_id, leg_order, origin, destination, departure_date, arrival_date, km_start, km_end, cargo, obs, client, freight_value, freight_status, receivable_id)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        req.params.id, leg_order, origin, destination,
+        departure_date || null, arrival_date || null,
+        km_start || null, km_end || null,
+        cargo || null, obs || null,
+        client || null, fv, fstatus, receivable_id,
+      ]
+    )
+    res.status(201).json({ id: result.insertId, leg_order, message: 'Trecho adicionado' })
+  } catch (err) {
+    console.error('Add leg error:', err)
+    res.status(500).json({ error: 'Erro ao adicionar trecho' })
+  }
+})
+
+// PUT /api/trips/:id/legs/:legId
+router.put('/:id/legs/:legId', async (req, res) => {
+  const { origin, destination, departure_date, arrival_date, km_start, km_end, cargo, obs, client, freight_value, freight_status } = req.body
+  const fv      = Number(freight_value) || 0
+  const fstatus = fv > 0 ? (freight_status || 'a_receber') : 'sem_frete'
+
+  try {
+    const [leg] = await query('SELECT * FROM trip_legs WHERE id = ? AND trip_id = ?', [req.params.legId, req.params.id])
+    if (!leg) return res.status(404).json({ error: 'Trecho não encontrado' })
+
+    const [trip] = await query('SELECT * FROM trips WHERE id = ?', [req.params.id])
+
+    let receivable_id = leg.receivable_id
+
+    if (fv > 0) {
+      const recStatus    = fstatus === 'pago' ? 'recebido' : 'pendente'
+      const receivedDate = fstatus === 'pago' ? (arrival_date || departure_date || trip.start_date) : null
+      const dueDate      = arrival_date || departure_date || trip.start_date
+
+      if (receivable_id) {
+        await query(
+          `UPDATE accounts_receivable SET
+             client=?, description=?, value=?, due_date=?, received_date=?, status=?
+           WHERE id=?`,
+          [
+            client || trip.client || null,
+            `Frete: ${origin} → ${destination}${cargo ? ' (' + cargo + ')' : ''}`,
+            fv, dueDate, receivedDate, recStatus, receivable_id,
+          ]
+        )
+      } else {
+        const recResult = await query(
+          `INSERT INTO accounts_receivable
+             (client, description, driver_id, vehicle_id, type, value, issue_date, due_date, received_date, status, obs)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          [
+            client || trip.client || null,
+            `Frete: ${origin} → ${destination}${cargo ? ' (' + cargo + ')' : ''}`,
+            trip.driver_id, trip.truck_id || null, 'frete', fv,
+            departure_date || trip.start_date, dueDate, receivedDate, recStatus,
+            `Viagem #${req.params.id}`,
+          ]
+        )
+        receivable_id = recResult.insertId
+      }
+    } else if (receivable_id) {
+      await query('DELETE FROM accounts_receivable WHERE id = ?', [receivable_id])
+      receivable_id = null
+    }
+
+    await query(
+      `UPDATE trip_legs SET
+         origin=?, destination=?, departure_date=?, arrival_date=?, km_start=?, km_end=?,
+         cargo=?, obs=?, client=?, freight_value=?, freight_status=?, receivable_id=?
+       WHERE id=? AND trip_id=?`,
+      [
+        origin, destination, departure_date || null, arrival_date || null,
+        km_start || null, km_end || null, cargo || null, obs || null,
+        client || null, fv, fstatus, receivable_id,
+        req.params.legId, req.params.id,
+      ]
+    )
+    res.json({ message: 'Trecho atualizado' })
+  } catch (err) {
+    console.error('Update leg error:', err)
+    res.status(500).json({ error: 'Erro ao atualizar trecho' })
+  }
+})
+
+// DELETE /api/trips/:id/legs/:legId
+router.delete('/:id/legs/:legId', async (req, res) => {
+  try {
+    const [leg] = await query('SELECT receivable_id FROM trip_legs WHERE id = ? AND trip_id = ?', [req.params.legId, req.params.id])
+    if (leg?.receivable_id) {
+      await query('DELETE FROM accounts_receivable WHERE id = ?', [leg.receivable_id])
+    }
+    await query('DELETE FROM trip_legs WHERE id = ? AND trip_id = ?', [req.params.legId, req.params.id])
+    res.json({ message: 'Trecho removido' })
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao remover trecho' })
   }
 })
 

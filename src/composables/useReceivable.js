@@ -37,6 +37,13 @@ export function useReceivable() {
     return res
   }
 
+  async function update(id, data) {
+    const res = await api.put(`/receivable/${id}`, data)
+    await fetchAll()
+    await fetchSummary()
+    return res
+  }
+
   async function remove(id) {
     const res = await api.delete(`/receivable/${id}`)
     items.value = items.value.filter(i => i.id !== id)
@@ -44,5 +51,5 @@ export function useReceivable() {
     return res
   }
 
-  return { items, summary, loading, fetchAll, fetchSummary, create, markReceived, remove }
+  return { items, summary, loading, fetchAll, fetchSummary, create, update, markReceived, remove }
 }

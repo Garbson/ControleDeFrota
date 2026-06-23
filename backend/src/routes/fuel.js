@@ -69,6 +69,20 @@ router.post(
   }
 )
 
+router.put('/:id', async (req, res) => {
+  const { driver_id, vehicle_id, liters, price_liter, station, fuel_date, obs } = req.body
+  const total = parseFloat(liters) * parseFloat(price_liter)
+  try {
+    await query(
+      'UPDATE fuel_records SET driver_id=?, vehicle_id=?, liters=?, price_liter=?, total=?, station=?, fuel_date=?, obs=? WHERE id=?',
+      [driver_id || null, vehicle_id || null, liters, price_liter, total.toFixed(2), station || null, fuel_date, obs || null, req.params.id]
+    )
+    res.json({ message: 'Abastecimento atualizado' })
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao atualizar abastecimento' })
+  }
+})
+
 router.delete('/:id', async (req, res) => {
   try {
     await query('DELETE FROM fuel_records WHERE id = ?', [req.params.id])

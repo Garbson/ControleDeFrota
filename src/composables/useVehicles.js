@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
 import { api } from './useApi'
 
 const vehicles = ref([])

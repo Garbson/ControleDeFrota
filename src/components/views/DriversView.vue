@@ -11,21 +11,34 @@ const dSort = ref('tires-desc')
 const dFilter = ref('all')
 const selectedDriver = ref(null)
 
-// ── Novo motorista
+// ── Novo / Editar motorista
 const showNewModal = ref(false)
 const newForm = ref({ name: '', color: '#2563eb', phone: '', cpf: '' })
 const newSaving = ref(false)
 const newError = ref('')
+const editingDriver = ref(null)
 const COLORS = ['#2563eb','#7c3aed','#059669','#d97706','#dc2626','#0891b2','#f59e0b','#10b981','#6366f1','#ec4899','#f97316','#14b8a6']
+
+function openEditDriver(d) {
+  editingDriver.value = d
+  newForm.value = { name: d.name, color: d.color || '#2563eb', phone: d.phone || '', cpf: d.cpf || '' }
+  newError.value = ''
+  showNewModal.value = true
+}
 
 async function saveNewDriver() {
   if (!newForm.value.name.trim()) { newError.value = 'Nome obrigatório'; return }
   newSaving.value = true
   newError.value = ''
   try {
-    await api.post('/drivers', newForm.value)
+    if (editingDriver.value) {
+      await api.put(`/drivers/${editingDriver.value.id}`, newForm.value)
+    } else {
+      await api.post('/drivers', newForm.value)
+    }
     await fetchAll()
     showNewModal.value = false
+    editingDriver.value = null
     newForm.value = { name: '', color: '#2563eb', phone: '', cpf: '' }
   } catch (e) {
     newError.value = e.message || 'Erro ao salvar'
@@ -137,19 +150,20 @@ onMounted(() => {
 
       <!-- Table -->
       <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div class="grid grid-cols-[2fr_1fr_1fr_80px_1fr_110px] gap-2 px-[18px] py-2.5 bg-slate-50 border-b border-slate-200">
+        <div class="grid grid-cols-[2fr_1fr_1fr_80px_1fr_110px_90px] gap-2 px-[18px] py-2.5 bg-slate-50 border-b border-slate-200">
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Motorista</div>
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Cavalo</div>
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Carreta / Reboque</div>
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Pneus</div>
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Consumo relativo</div>
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Status</div>
+          <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Ações</div>
         </div>
         <div
           v-for="d in sortedDrivers"
           :key="d.id"
           @click="selectDriver(d)"
-          class="grid grid-cols-[2fr_1fr_1fr_80px_1fr_110px] gap-2 px-[18px] py-3 border-b border-slate-50 items-center cursor-pointer transition-colors hover:bg-slate-50"
+          class="grid grid-cols-[2fr_1fr_1fr_80px_1fr_110px_90px] gap-2 px-[18px] py-3 border-b border-slate-50 items-center cursor-pointer transition-colors hover:bg-slate-50"
         >
           <div class="flex items-center gap-2.5">
             <div
@@ -187,6 +201,22 @@ onMounted(() => {
           <div class="flex items-center gap-1.5">
             <span class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold bg-green-100 text-green-600">● Ativo</span>
             <svg width="15" height="15" fill="#94a3b8" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+          </div>
+          <div class="flex items-center justify-center gap-1.5">
+            <button
+              @click.stop="selectDriver(d)"
+              title="Visualizar"
+              class="text-slate-500 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-md transition-colors"
+            >
+              <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            </button>
+            <button
+              @click.stop="openEditDriver(d)"
+              title="Editar motorista"
+              class="text-blue-600 bg-blue-50 hover:bg-blue-100 p-1.5 rounded-md transition-colors"
+            >
+              <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+            </button>
           </div>
         </div>
         <div v-if="!sortedDrivers.length" class="text-center text-slate-400 text-xs py-10">Nenhum motorista encontrado</div>
@@ -269,8 +299,8 @@ onMounted(() => {
         <div class="absolute inset-0 bg-black/40" @click="showNewModal = false" />
         <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md z-10">
           <div class="flex items-center justify-between p-5 border-b border-slate-100">
-            <h3 class="text-base font-bold text-slate-900 m-0">Novo Motorista</h3>
-            <button @click="showNewModal = false" class="text-slate-400 hover:text-slate-600">
+            <h3 class="text-base font-bold text-slate-900 m-0">{{ editingDriver ? 'Editar Motorista' : 'Novo Motorista' }}</h3>
+            <button @click="showNewModal = false; editingDriver = null; newForm = { name: '', color: '#2563eb', phone: '', cpf: '' }" class="text-slate-400 hover:text-slate-600">
               <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
           </div>
@@ -326,7 +356,7 @@ onMounted(() => {
             <p v-if="newError" class="text-red-500 text-xs">{{ newError }}</p>
           </div>
           <div class="flex gap-3 px-5 pb-5">
-            <button @click="showNewModal = false" class="flex-1 border border-slate-200 text-slate-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-slate-50">
+            <button @click="showNewModal = false; editingDriver = null; newForm = { name: '', color: '#2563eb', phone: '', cpf: '' }" class="flex-1 border border-slate-200 text-slate-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-slate-50">
               Cancelar
             </button>
             <button
@@ -334,7 +364,7 @@ onMounted(() => {
               :disabled="newSaving"
               class="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-bold py-2.5 rounded-lg transition-colors"
             >
-              {{ newSaving ? 'Salvando...' : 'Cadastrar Motorista' }}
+              {{ newSaving ? 'Salvando...' : editingDriver ? 'Salvar Alterações' : 'Cadastrar Motorista' }}
             </button>
           </div>
         </div>

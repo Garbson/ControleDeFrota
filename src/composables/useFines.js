@@ -54,11 +54,18 @@ export function useFines() {
     await fetchSummary()
   }
 
+  async function update(id, data) {
+    const res = await api.put(`/fines/${id}`, data)
+    await fetchAll()
+    await fetchSummary()
+    return res
+  }
+
   async function remove(id) {
     await api.delete(`/fines/${id}`)
     items.value = items.value.filter(f => f.id !== id)
     await fetchSummary()
   }
 
-  return { items, summary, loading, descriptions, fetchAll, fetchSummary, fetchDescriptions, create, markPaid, markAppeal, remove }
+  return { items, summary, loading, descriptions, fetchAll, fetchSummary, fetchDescriptions, create, update, markPaid, markAppeal, remove }
 }

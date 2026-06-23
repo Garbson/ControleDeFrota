@@ -67,6 +67,19 @@ router.post(
   }
 )
 
+router.put('/:id', async (req, res) => {
+  const { document, description, client, driver_id, vehicle_id, type, value, issue_date, due_date, obs } = req.body
+  try {
+    await query(
+      `UPDATE accounts_receivable SET document=?, description=?, client=?, driver_id=?, vehicle_id=?, type=?, value=?, issue_date=?, due_date=?, obs=? WHERE id=?`,
+      [document || null, description || null, client, driver_id || null, vehicle_id || null, type || 'frete', value, issue_date || null, due_date, obs || null, req.params.id]
+    )
+    res.json({ message: 'Conta atualizada' })
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao atualizar conta' })
+  }
+})
+
 router.patch('/:id/receive', async (req, res) => {
   const received_date = req.body.received_date || new Date().toISOString().split('T')[0]
   try {

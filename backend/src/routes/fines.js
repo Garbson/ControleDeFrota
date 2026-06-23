@@ -84,6 +84,20 @@ router.post('/', [
   }
 })
 
+// PUT /fines/:id — editar multa
+router.put('/:id', async (req, res) => {
+  const { driver_id, vehicle_plate, value, fine_date, due_date, description, category, obs } = req.body
+  try {
+    await query(
+      `UPDATE fines SET driver_id=?, vehicle_plate=?, value=?, fine_date=?, due_date=?, description=?, category=?, obs=? WHERE id=?`,
+      [driver_id || null, vehicle_plate?.toUpperCase(), value, fine_date, due_date || null, description || null, category || 'outros', obs || null, req.params.id]
+    )
+    res.json({ message: 'Multa atualizada' })
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao atualizar multa' })
+  }
+})
+
 // PATCH /fines/:id/pay — marcar como pago
 router.patch('/:id/pay', async (req, res) => {
   const { paid_date } = req.body

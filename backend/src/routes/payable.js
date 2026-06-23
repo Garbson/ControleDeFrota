@@ -2,6 +2,7 @@ const router = require('express').Router()
 const { body, validationResult } = require('express-validator')
 const { query } = require('../config/database')
 const { authenticate } = require('../middleware/auth')
+const { findActiveTrip } = require('../utils/findActiveTrip')
 
 router.use(authenticate)
 
@@ -10,11 +11,13 @@ router.get('/', async (req, res) => {
   try {
     const { status, category, from, to } = req.query
     let sql = `
-      SELECT ap.*, d.name AS driver_name, v.plate AS vehicle_plate, s.name AS supplier_name
+      SELECT ap.*, d.name AS driver_name, v.plate AS vehicle_plate, s.name AS supplier_name,
+             CONCAT(t.origin, ' → ', t.destination) AS trip_label
       FROM accounts_payable ap
       LEFT JOIN drivers d ON d.id = ap.driver_id
       LEFT JOIN vehicles v ON v.id = ap.vehicle_id
       LEFT JOIN suppliers s ON s.id = ap.supplier_id
+      LEFT JOIN trips t ON t.id = ap.trip_id
       WHERE 1=1
     `
     const params = []
@@ -65,14 +68,18 @@ router.post(
     const errors = validationResult(req)
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() })
 
-    const { document, description, supplier_id, driver_id, vehicle_id, category, value, issue_date, due_date, obs } = req.body
+    const { document, description, supplier_id, driver_id, vehicle_id, trip_id, category, value, issue_date, due_date, obs } = req.body
     try {
+      // Auto-detecta viagem ativa se não vier trip_id explícito
+      const refDate = issue_date || due_date
+      const resolvedTripId = trip_id || await findActiveTrip(driver_id, refDate)
+
       const result = await query(
         `INSERT INTO accounts_payable
-          (document, description, supplier_id, driver_id, vehicle_id, category, value, issue_date, due_date, obs)
-         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+          (document, description, supplier_id, driver_id, vehicle_id, trip_id, category, value, issue_date, due_date, obs)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
         [document || null, description || null, supplier_id || null, driver_id || null,
-         vehicle_id || null, category, value, issue_date || null, due_date, obs || null]
+         vehicle_id || null, resolvedTripId || null, category, value, issue_date || null, due_date, obs || null]
       )
       res.status(201).json({ id: result.insertId, message: 'Conta criada' })
     } catch (err) {
@@ -97,15 +104,15 @@ router.patch('/:id/pay', async (req, res) => {
 
 // PUT /payable/:id
 router.put('/:id', async (req, res) => {
-  const { document, description, supplier_id, driver_id, vehicle_id, category, value, issue_date, due_date, status, obs } = req.body
+  const { document, description, supplier_id, driver_id, vehicle_id, trip_id, category, value, issue_date, due_date, status, obs } = req.body
   try {
     await query(
       `UPDATE accounts_payable SET
-        document=?, description=?, supplier_id=?, driver_id=?, vehicle_id=?,
+        document=?, description=?, supplier_id=?, driver_id=?, vehicle_id=?, trip_id=?,
         category=?, value=?, issue_date=?, due_date=?, status=?, obs=?
        WHERE id=?`,
       [document || null, description || null, supplier_id || null, driver_id || null,
-       vehicle_id || null, category, value, issue_date || null, due_date, status, obs || null, req.params.id]
+       vehicle_id || null, trip_id || null, category, value, issue_date || null, due_date, status, obs || null, req.params.id]
     )
     res.json({ message: 'Conta atualizada' })
   } catch (err) {

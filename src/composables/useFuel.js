@@ -31,6 +31,13 @@ export function useFuel() {
     return res
   }
 
+  async function update(id, data) {
+    const res = await api.put(`/fuel/${id}`, data)
+    await fetchAll()
+    await fetchSummary()
+    return res
+  }
+
   async function remove(id) {
     const res = await api.delete(`/fuel/${id}`)
     records.value = records.value.filter(r => r.id !== id)
@@ -38,5 +45,5 @@ export function useFuel() {
     return res
   }
 
-  return { records, summary, loading, fetchAll, fetchSummary, create, remove }
+  return { records, summary, loading, fetchAll, fetchSummary, create, update, remove }
 }
