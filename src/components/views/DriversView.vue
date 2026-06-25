@@ -120,13 +120,13 @@ onMounted(() => {
 
     <template v-else>
       <!-- Filters + Novo -->
-      <div class="bg-white rounded-[11px] py-3.5 px-[18px] border border-slate-200 mb-3.5 flex justify-between items-center flex-wrap gap-2.5">
+      <div class="glass rounded-[11px] py-3.5 px-[18px] mb-3.5 flex justify-between items-center flex-wrap gap-2.5">
         <div class="flex items-center gap-2.5 flex-wrap">
           <span class="text-xs font-bold text-slate-500">ORDENAR:</span>
           <button class="sbtn" :class="{ on: dSort === 'tires-desc' }" @click="dSort = 'tires-desc'">↓ Mais pneus</button>
           <button class="sbtn" :class="{ on: dSort === 'tires-asc' }" @click="dSort = 'tires-asc'">↑ Menos pneus</button>
           <button class="sbtn" :class="{ on: dSort === 'name' }" @click="dSort = 'name'">A–Z Nome</button>
-          <div class="w-px h-5 bg-slate-200" />
+          <div class="w-px h-5 bg-stone-200" />
           <span class="text-xs font-bold text-slate-500">FILTRAR:</span>
           <button class="sbtn" :class="{ on: dFilter === 'all' }" @click="dFilter = 'all'">Todos</button>
           <button class="sbtn" :class="{ on: dFilter === 'carreta' }" @click="dFilter = 'carreta'">Carreta</button>
@@ -135,8 +135,8 @@ onMounted(() => {
         </div>
         <div class="flex items-center gap-2.5">
           <div class="text-xs text-slate-400">
-            <strong class="text-slate-900">{{ sortedDrivers.length }}</strong> motoristas &nbsp;·&nbsp;
-            <strong class="text-slate-900">{{ sortedDrivers.reduce((s, d) => s + Number(d.total_tires), 0) }}</strong> pneus
+            <strong class="text-stone-800">{{ sortedDrivers.length }}</strong> motoristas &nbsp;·&nbsp;
+            <strong class="text-stone-800">{{ sortedDrivers.reduce((s, d) => s + Number(d.total_tires), 0) }}</strong> pneus
           </div>
           <button
             @click="showNewModal = true"
@@ -149,8 +149,8 @@ onMounted(() => {
       </div>
 
       <!-- Table -->
-      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div class="grid grid-cols-[2fr_1fr_1fr_80px_1fr_110px_90px] gap-2 px-[18px] py-2.5 bg-slate-50 border-b border-slate-200">
+      <div class="glass rounded-xl overflow-hidden">
+        <div class="grid grid-cols-[2fr_1fr_1fr_80px_1fr_110px_90px] gap-2 px-[18px] py-2.5 border-b border-stone-200">
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Motorista</div>
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Cavalo</div>
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Carreta / Reboque</div>
@@ -163,7 +163,7 @@ onMounted(() => {
           v-for="d in sortedDrivers"
           :key="d.id"
           @click="selectDriver(d)"
-          class="grid grid-cols-[2fr_1fr_1fr_80px_1fr_110px_90px] gap-2 px-[18px] py-3 border-b border-slate-50 items-center cursor-pointer transition-colors hover:bg-slate-50"
+          class="grid grid-cols-[2fr_1fr_1fr_80px_1fr_110px_90px] gap-2 px-[18px] py-3 border-b border-stone-100 items-center cursor-pointer transition-colors hover:bg-stone-50"
         >
           <div class="flex items-center gap-2.5">
             <div
@@ -173,7 +173,7 @@ onMounted(() => {
               {{ d.name[0] }}
             </div>
             <div>
-              <div class="font-bold text-slate-900 text-[13.5px]">{{ d.name }}</div>
+              <div class="font-bold text-stone-800 text-[13.5px]">{{ d.name }}</div>
               <div class="text-[10.5px] text-slate-400">{{ d.trailer_type || '—' }}</div>
             </div>
           </div>
@@ -185,7 +185,7 @@ onMounted(() => {
             <span v-if="d.trailer_plate" class="font-mono text-xs font-bold text-violet-700 bg-violet-50 px-2 py-[3px] rounded-[5px]">{{ d.trailer_plate }}</span>
             <span v-else class="text-slate-400 text-xs">—</span>
           </div>
-          <div class="text-2xl font-extrabold text-slate-900">{{ d.total_tires }}</div>
+          <div class="text-2xl font-extrabold text-stone-800">{{ d.total_tires }}</div>
           <div class="pr-3">
             <div class="pbg">
               <div
@@ -206,7 +206,7 @@ onMounted(() => {
             <button
               @click.stop="selectDriver(d)"
               title="Visualizar"
-              class="text-slate-500 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-md transition-colors"
+              class="text-stone-600 bg-stone-100/70 hover:bg-stone-100 p-1.5 rounded-md transition-colors"
             >
               <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
             </button>
@@ -230,14 +230,14 @@ onMounted(() => {
         <div class="slide-panel">
           <!-- Header colorido -->
           <div class="p-6 relative" :style="{ background: `linear-gradient(135deg, ${selectedDriver.color || '#2563eb'}, ${selectedDriver.color || '#2563eb'}dd)` }">
-            <button @click="selectedDriver = null" class="absolute top-4 right-4 text-white/70 hover:text-white">
+            <button @click="selectedDriver = null" class="absolute top-4 right-4 text-stone-600 hover:text-white">
               <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
             <div class="flex items-center gap-3">
               <div class="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-2xl font-extrabold text-white">{{ selectedDriver.name[0] }}</div>
               <div>
                 <h2 class="m-0 text-lg font-extrabold text-white">{{ selectedDriver.name }}</h2>
-                <p class="m-0 text-sm text-white/70">{{ selectedDriver.trailer_type || '—' }}</p>
+                <p class="m-0 text-sm text-stone-600">{{ selectedDriver.trailer_type || '—' }}</p>
               </div>
             </div>
             <div class="grid grid-cols-2 gap-3 mt-4">
@@ -271,18 +271,18 @@ onMounted(() => {
 
           <!-- Histórico de Pneus -->
           <div class="p-5 overflow-y-auto flex-1">
-            <h4 class="m-0 mb-3 text-sm font-bold text-slate-900">Histórico de Pneus</h4>
+            <h4 class="m-0 mb-3 text-sm font-bold text-stone-800">Histórico de Pneus</h4>
             <div v-if="selectedDriver.tireHistory && selectedDriver.tireHistory.length > 0">
-              <div v-for="(h, i) in selectedDriver.tireHistory" :key="h.id" class="flex items-center gap-3 py-2.5 border-b border-slate-50">
+              <div v-for="(h, i) in selectedDriver.tireHistory" :key="h.id" class="flex items-center gap-3 py-2.5 border-b border-stone-100">
                 <div class="w-7 h-7 rounded-md flex items-center justify-center text-[11px] font-bold flex-shrink-0" :style="{ background: `${selectedDriver.color || '#2563eb'}22`, color: selectedDriver.color || '#2563eb' }">
                   {{ selectedDriver.tireHistory.length - i }}
                 </div>
                 <div class="flex-1">
-                  <div class="text-xs font-semibold text-slate-900">{{ h.brand || h.type || 'Pneu' }}</div>
+                  <div class="text-xs font-semibold text-stone-800">{{ h.brand || h.type || 'Pneu' }}</div>
                   <div class="text-[10px] text-slate-400">{{ h.vehicle_plate || '—' }}</div>
                 </div>
                 <div class="text-right">
-                  <div class="text-xs font-extrabold text-slate-900">{{ h.qty }} un</div>
+                  <div class="text-xs font-extrabold text-stone-800">{{ h.qty }} un</div>
                   <div class="text-[10px] text-slate-400">{{ h.assigned_at?.split('T')[0] || '—' }}</div>
                 </div>
               </div>
@@ -297,48 +297,48 @@ onMounted(() => {
     <Teleport to="body">
       <div v-if="showNewModal" class="fixed inset-0 z-[80] flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40" @click="showNewModal = false" />
-        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md z-10">
-          <div class="flex items-center justify-between p-5 border-b border-slate-100">
-            <h3 class="text-base font-bold text-slate-900 m-0">{{ editingDriver ? 'Editar Motorista' : 'Novo Motorista' }}</h3>
-            <button @click="showNewModal = false; editingDriver = null; newForm = { name: '', color: '#2563eb', phone: '', cpf: '' }" class="text-slate-400 hover:text-slate-600">
+        <div class="relative glass-strong rounded-2xl w-full max-w-md z-10">
+          <div class="flex items-center justify-between p-5 border-b border-stone-100">
+            <h3 class="text-base font-bold text-stone-800 m-0">{{ editingDriver ? 'Editar Motorista' : 'Novo Motorista' }}</h3>
+            <button @click="showNewModal = false; editingDriver = null; newForm = { name: '', color: '#2563eb', phone: '', cpf: '' }" class="text-slate-400 hover:text-stone-600">
               <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
           </div>
           <div class="p-5 space-y-4">
             <!-- Nome -->
             <div>
-              <label class="block text-xs font-bold text-slate-600 mb-1.5">Nome *</label>
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">Nome *</label>
               <input
                 v-model="newForm.name"
                 type="text"
                 placeholder="Ex: JOÃO SILVA"
-                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
+                class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
                 @input="newForm.name = newForm.name.toUpperCase()"
               />
             </div>
             <!-- Telefone -->
             <div>
-              <label class="block text-xs font-bold text-slate-600 mb-1.5">Telefone</label>
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">Telefone</label>
               <input
                 v-model="newForm.phone"
                 type="text"
                 placeholder="(00) 00000-0000"
-                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <!-- CPF -->
             <div>
-              <label class="block text-xs font-bold text-slate-600 mb-1.5">CPF</label>
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">CPF</label>
               <input
                 v-model="newForm.cpf"
                 type="text"
                 placeholder="000.000.000-00"
-                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <!-- Cor -->
             <div>
-              <label class="block text-xs font-bold text-slate-600 mb-2">Cor de identificação</label>
+              <label class="block text-xs font-bold text-stone-600 mb-2">Cor de identificação</label>
               <div class="flex flex-wrap gap-2">
                 <button
                   v-for="c in COLORS"
@@ -349,14 +349,14 @@ onMounted(() => {
                 />
               </div>
               <div class="mt-2 flex items-center gap-2">
-                <div class="w-8 h-8 rounded-full border border-slate-200 flex-shrink-0" :style="{ background: newForm.color }" />
+                <div class="w-8 h-8 rounded-full border border-stone-200 flex-shrink-0" :style="{ background: newForm.color }" />
                 <span class="text-xs text-slate-500">Prévia: {{ newForm.name || 'Nome' }}</span>
               </div>
             </div>
             <p v-if="newError" class="text-red-500 text-xs">{{ newError }}</p>
           </div>
           <div class="flex gap-3 px-5 pb-5">
-            <button @click="showNewModal = false; editingDriver = null; newForm = { name: '', color: '#2563eb', phone: '', cpf: '' }" class="flex-1 border border-slate-200 text-slate-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-slate-50">
+            <button @click="showNewModal = false; editingDriver = null; newForm = { name: '', color: '#2563eb', phone: '', cpf: '' }" class="flex-1 border border-stone-200 text-stone-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-stone-50/50">
               Cancelar
             </button>
             <button
@@ -375,26 +375,26 @@ onMounted(() => {
     <Teleport to="body">
       <div v-if="showVehicleModal" class="fixed inset-0 z-[90] flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40" @click="showVehicleModal = false" />
-        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md z-10">
-          <div class="flex items-center justify-between p-5 border-b border-slate-100">
+        <div class="relative glass-strong rounded-2xl w-full max-w-md z-10">
+          <div class="flex items-center justify-between p-5 border-b border-stone-100">
             <div>
-              <h3 class="text-base font-bold text-slate-900 m-0">Trocar Veículos</h3>
+              <h3 class="text-base font-bold text-stone-800 m-0">Trocar Veículos</h3>
               <p class="text-xs text-slate-400 m-0">{{ selectedDriver?.name }}</p>
             </div>
-            <button @click="showVehicleModal = false" class="text-slate-400 hover:text-slate-600">
+            <button @click="showVehicleModal = false" class="text-slate-400 hover:text-stone-600">
               <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
           </div>
           <div class="p-5 space-y-4">
             <!-- Cavalo -->
             <div>
-              <label class="block text-xs font-bold text-slate-600 mb-1.5">
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">
                 <span class="font-mono text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-[10px] mr-1.5">TRUCK</span>
                 Cavalo (Caminhão)
               </label>
               <select
                 v-model="vehicleForm.truck_id"
-                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">— Sem cavalo —</option>
                 <option v-for="t in trucks" :key="t.id" :value="t.id">
@@ -404,13 +404,13 @@ onMounted(() => {
             </div>
             <!-- Carreta -->
             <div>
-              <label class="block text-xs font-bold text-slate-600 mb-1.5">
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">
                 <span class="font-mono text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded text-[10px] mr-1.5">TRAILER</span>
                 Carreta / Reboque
               </label>
               <select
                 v-model="vehicleForm.trailer_id"
-                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">— Sem carreta —</option>
                 <option v-for="t in trailers" :key="t.id" :value="t.id">
@@ -420,10 +420,10 @@ onMounted(() => {
             </div>
             <!-- Tipo -->
             <div>
-              <label class="block text-xs font-bold text-slate-600 mb-1.5">Tipo de operação</label>
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">Tipo de operação</label>
               <select
                 v-model="vehicleForm.trailer_type"
-                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">— Selecione —</option>
                 <option v-for="tp in TRAILER_TYPES" :key="tp" :value="tp">{{ tp }}</option>
@@ -432,7 +432,7 @@ onMounted(() => {
             <p v-if="vehicleError" class="text-red-500 text-xs">{{ vehicleError }}</p>
           </div>
           <div class="flex gap-3 px-5 pb-5">
-            <button @click="showVehicleModal = false" class="flex-1 border border-slate-200 text-slate-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-slate-50">
+            <button @click="showVehicleModal = false" class="flex-1 border border-stone-200 text-stone-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-stone-50/50">
               Cancelar
             </button>
             <button

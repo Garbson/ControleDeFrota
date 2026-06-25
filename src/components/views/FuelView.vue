@@ -102,7 +102,7 @@ onMounted(() => {
     </div>
 
     <!-- Toolbar -->
-    <div class="bg-white rounded-[11px] py-3.5 px-[18px] border border-slate-200 mb-3.5 flex gap-2.5 items-center flex-wrap">
+    <div class="glass rounded-[11px] py-3.5 px-[18px] mb-3.5 flex gap-2.5 items-center flex-wrap">
       <span class="text-xs font-bold text-slate-500">ORDENAR:</span>
       <button class="sbtn" :class="{ on: fuelSort === 'data-desc' }" @click="fuelSort = 'data-desc'">↓ Mais recentes</button>
       <button class="sbtn" :class="{ on: fuelSort === 'data-asc' }" @click="fuelSort = 'data-asc'">↑ Mais antigos</button>
@@ -120,7 +120,7 @@ onMounted(() => {
     <div v-if="loading" class="flex items-center justify-center py-10 text-slate-400 text-sm">Carregando...</div>
 
     <!-- Table -->
-    <div v-else class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div v-else class="glass rounded-xl overflow-hidden">
       <table class="w-full border-collapse">
         <thead>
           <tr>
@@ -137,21 +137,21 @@ onMounted(() => {
         <tbody>
           <tr class="trow" v-for="f in sortedRecords" :key="f.id">
             <td class="td font-medium whitespace-nowrap">{{ f.fuel_date }}</td>
-            <td class="td font-semibold text-slate-900 text-xs">{{ f.driver_name || '—' }}</td>
+            <td class="td font-semibold text-stone-800 text-xs">{{ f.driver_name || '—' }}</td>
             <td class="td">
               <span v-if="f.vehicle_plate" class="font-mono text-xs font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded">{{ f.vehicle_plate }}</span>
               <span v-else class="text-slate-400 text-xs">—</span>
             </td>
-            <td class="td font-bold text-slate-900">{{ f.liters }} L</td>
+            <td class="td font-bold text-stone-800">{{ f.liters }} L</td>
             <td class="td text-slate-500">R$ {{ Number(f.price_liter).toFixed(2) }}</td>
-            <td class="td font-extrabold text-slate-900">R$ {{ fmt(f.total) }}</td>
+            <td class="td font-extrabold text-stone-800">R$ {{ fmt(f.total) }}</td>
             <td class="td text-xs text-slate-500 max-w-[180px] truncate">{{ f.station || '—' }}</td>
             <td class="td text-center">
               <div class="flex items-center justify-center gap-1.5">
                 <button
                   @click="viewingFuel = f"
                   title="Visualizar"
-                  class="text-slate-500 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-md transition-colors inline-flex"
+                  class="text-stone-600 bg-stone-100/70 hover:bg-stone-100 p-1.5 rounded-md transition-colors inline-flex"
                 >
                   <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
                 </button>
@@ -173,7 +173,7 @@ onMounted(() => {
     <!-- Modal Form -->
     <Teleport to="body">
       <div v-if="showFuelForm" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" @click.self="showFuelForm = false; editingFuel = null">
-        <div class="bg-white rounded-xl w-[480px] max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div class="glass-strong rounded-xl w-[480px] max-h-[90vh] overflow-y-auto">
           <div class="bg-gradient-to-br from-[#1a1f2e] to-[#1e293b] px-6 py-5 rounded-t-xl">
             <h3 class="m-0 text-[15px] font-bold text-white">⛽ {{ editingFuel ? 'Editar Abastecimento' : 'Novo Abastecimento' }}</h3>
             <p class="mt-1 mb-0 text-xs text-slate-400">Registre o abastecimento por motorista e veículo</p>
@@ -199,7 +199,7 @@ onMounted(() => {
                 <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Preço/L (R$) *</label>
                 <input v-model="fuelForm.price_liter" type="number" placeholder="0,00" min="0" step="0.01" class="finput" />
               </div>
-              <div v-if="formComputed" class="col-span-2 bg-slate-50 rounded-lg px-4 py-3 flex items-center gap-4">
+              <div v-if="formComputed" class="col-span-2 rounded-lg px-4 py-3 bg-stone-50 flex items-center gap-4">
                 <span class="text-xs text-slate-500">Total calculado:</span>
                 <span class="text-lg font-extrabold text-blue-600">R$ {{ formComputed }}</span>
               </div>
@@ -208,8 +208,8 @@ onMounted(() => {
                 <input v-model="fuelForm.station" placeholder="Ex: Posto Ipiranga — BR 364" class="finput" />
               </div>
             </div>
-            <div class="mt-5 pt-4 border-t border-slate-50 flex justify-between items-center">
-              <button @click="showFuelForm = false; editingFuel = null" class="px-4 py-2 bg-transparent border border-slate-200 rounded-lg text-slate-500 text-xs font-semibold cursor-pointer">Cancelar</button>
+            <div class="mt-5 pt-4 border-t border-stone-100 flex justify-between items-center">
+              <button @click="showFuelForm = false; editingFuel = null" class="px-4 py-2 bg-transparent border border-stone-200 rounded-lg text-stone-600 text-xs font-semibold cursor-pointer">Cancelar</button>
               <button @click="submitFuel" class="btn-p" :disabled="!formValid">{{ editingFuel ? 'Salvar Alterações' : 'Salvar Abastecimento' }}</button>
             </div>
           </div>
@@ -221,7 +221,7 @@ onMounted(() => {
     <Teleport to="body">
       <div v-if="viewingFuel" class="fixed inset-0 z-[110] flex items-center justify-center p-4" @click.self="viewingFuel = null">
         <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="viewingFuel = null" />
-        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-[500px] overflow-hidden">
+        <div class="relative glass-strong rounded-2xl w-full max-w-[500px] overflow-hidden">
           <div class="px-7 py-5 bg-gradient-to-br from-[#1a1f2e] to-[#1e293b] flex items-center justify-between">
             <div>
               <h3 class="m-0 text-[15px] font-bold text-white">⛽ Detalhes do Abastecimento</h3>
@@ -250,7 +250,7 @@ onMounted(() => {
             </div>
             <div>
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Litros</div>
-              <div class="text-lg font-extrabold text-slate-900">{{ Number(viewingFuel.liters).toFixed(2) }} L</div>
+              <div class="text-lg font-extrabold text-stone-800">{{ Number(viewingFuel.liters).toFixed(2) }} L</div>
             </div>
             <div>
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Preço / L</div>
@@ -262,11 +262,11 @@ onMounted(() => {
             </div>
             <div v-if="viewingFuel.obs" class="col-span-2">
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Observação</div>
-              <div class="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 border border-slate-100">{{ viewingFuel.obs }}</div>
+              <div class="text-sm text-stone-600 rounded-lg p-3 bg-stone-50 border border-stone-100">{{ viewingFuel.obs }}</div>
             </div>
           </div>
-          <div class="px-7 py-4 border-t border-slate-100 flex justify-end">
-            <button @click="viewingFuel = null" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition-colors">Fechar</button>
+          <div class="px-7 py-4 border-t border-stone-100 flex justify-end">
+            <button @click="viewingFuel = null" class="px-5 py-2 bg-stone-100/70 hover:bg-stone-100 text-stone-700 text-sm font-semibold rounded-lg transition-colors">Fechar</button>
           </div>
         </div>
       </div>

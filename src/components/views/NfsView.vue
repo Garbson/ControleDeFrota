@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useStock } from '../../composables/useStock'
 import KPICard from '../ui/KPICard.vue'
 
@@ -39,9 +39,9 @@ onMounted(() => fetchAll())
         <KPICard title="Preço Médio/Pneu" :value="`R$ ${fmt(avgPrice)}`" subtitle="com base nos itens" color="#f59e0b" border-color="#f59e0b" />
       </div>
 
-      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div class="px-[22px] py-[17px] border-b border-slate-50 flex items-center justify-between">
-          <h3 class="m-0 text-sm font-bold text-slate-900">Notas Fiscais de Compra</h3>
+      <div class="glass rounded-xl overflow-hidden">
+        <div class="px-[22px] py-[17px] border-b border-stone-100 flex items-center justify-between">
+          <h3 class="m-0 text-sm font-bold text-stone-800">Notas Fiscais de Compra</h3>
           <span class="text-xs text-slate-400">Histórico de aquisições</span>
         </div>
         <table class="w-full border-collapse">
@@ -61,7 +61,7 @@ onMounted(() => fetchAll())
               </td>
               <td class="td text-xs text-slate-500">{{ g.items.map(i => i.description).join(', ') }}</td>
               <td class="td"><strong>{{ g.qty }}</strong> pneus</td>
-              <td class="td font-extrabold text-slate-900">R$ {{ fmt(g.value) }}</td>
+              <td class="td font-extrabold text-stone-800">R$ {{ fmt(g.value) }}</td>
               <td class="td text-slate-500">R$ {{ g.qty > 0 ? fmt(g.value / g.qty) : '—' }}</td>
             </tr>
           </tbody>

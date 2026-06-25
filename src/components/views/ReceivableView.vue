@@ -108,7 +108,7 @@ onMounted(() => {
       </div>
 
       <!-- Filters -->
-      <div class="bg-white rounded-[11px] py-3.5 px-[18px] border border-slate-200 mb-3.5 flex gap-2.5 items-center">
+      <div class="glass rounded-[11px] py-3.5 px-[18px] mb-3.5 flex gap-2.5 items-center">
         <span class="text-xs font-bold text-slate-500">FILTRAR:</span>
         <button class="sbtn" :class="{ on: crFilter === 'all' }" @click="crFilter = 'all'">Todos</button>
         <button class="sbtn" :class="{ on: crFilter === 'pendente' }" @click="crFilter = 'pendente'">Pendentes</button>
@@ -116,7 +116,7 @@ onMounted(() => {
       </div>
 
       <!-- Table -->
-      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="glass rounded-xl overflow-hidden">
         <table class="w-full border-collapse">
           <thead>
             <tr>
@@ -133,19 +133,19 @@ onMounted(() => {
           <tbody>
             <tr class="trow" v-for="c in filteredCR" :key="c.id">
               <td class="td whitespace-nowrap">
-                <div class="font-semibold text-slate-900">{{ fmtDate(c.due_date || c.issue_date) }}</div>
+                <div class="font-semibold text-stone-800">{{ fmtDate(c.due_date || c.issue_date) }}</div>
                 <span v-if="dueBadge(c.due_date, c.status)" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full" :class="dueBadge(c.due_date, c.status).cls">
                   {{ dueBadge(c.due_date, c.status).label }}
                 </span>
               </td>
-              <td class="td font-semibold text-slate-900 text-xs max-w-[160px] truncate" :title="c.client">{{ c.client || '—' }}</td>
+              <td class="td font-semibold text-stone-800 text-xs max-w-[160px] truncate" :title="c.client">{{ c.client || '—' }}</td>
               <td class="td text-xs">{{ c.description || c.type || '—' }}</td>
-              <td class="td font-extrabold text-slate-900 whitespace-nowrap">R$ {{ fmt(c.value) }}</td>
+              <td class="td font-extrabold text-stone-800 whitespace-nowrap">R$ {{ fmt(c.value) }}</td>
               <td class="td">
                 <span v-if="c.vehicle_plate" class="font-mono text-xs font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded">{{ c.vehicle_plate }}</span>
                 <span v-else class="text-slate-400 text-xs">—</span>
               </td>
-              <td class="td font-semibold text-slate-900 text-xs">{{ c.driver_name || '—' }}</td>
+              <td class="td font-semibold text-stone-800 text-xs">{{ c.driver_name || '—' }}</td>
               <td class="td">
                 <span
                   class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold"
@@ -159,7 +159,7 @@ onMounted(() => {
                   <button
                     @click="viewingReceivable = c"
                     title="Visualizar"
-                    class="text-slate-500 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-md transition-colors inline-flex"
+                    class="text-stone-600 bg-stone-100/70 hover:bg-stone-100 p-1.5 rounded-md transition-colors inline-flex"
                   >
                     <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
                   </button>
@@ -186,40 +186,40 @@ onMounted(() => {
     <Teleport to="body">
       <div v-if="editingReceivable" class="fixed inset-0 z-[80] flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40" @click="editingReceivable = null" />
-        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md z-10">
-          <div class="flex items-center justify-between p-5 border-b border-slate-100">
-            <h3 class="text-base font-bold text-slate-900 m-0">Editar Conta a Receber</h3>
-            <button @click="editingReceivable = null" class="text-slate-400 hover:text-slate-600">
+        <div class="relative glass-strong rounded-2xl w-full max-w-md z-10">
+          <div class="flex items-center justify-between p-5 border-b border-stone-100">
+            <h3 class="text-base font-bold text-stone-800 m-0">Editar Conta a Receber</h3>
+            <button @click="editingReceivable = null" class="text-slate-400 hover:text-stone-600">
               <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
           </div>
           <div class="p-5 space-y-4">
             <div>
-              <label class="block text-xs font-bold text-slate-600 mb-1.5">Cliente *</label>
-              <input v-model="editForm.client" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">Cliente *</label>
+              <input v-model="editForm.client" type="text" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-bold text-slate-600 mb-1.5">Valor (R$) *</label>
-                <input v-model="editForm.value" type="number" step="0.01" min="0" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Valor (R$) *</label>
+                <input v-model="editForm.value" type="number" step="0.01" min="0" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
               </div>
               <div>
-                <label class="block text-xs font-bold text-slate-600 mb-1.5">Vencimento</label>
-                <input v-model="editForm.due_date" type="date" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Vencimento</label>
+                <input v-model="editForm.due_date" type="date" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
               </div>
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-600 mb-1.5">Descrição</label>
-              <input v-model="editForm.description" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">Descrição</label>
+              <input v-model="editForm.description" type="text" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-600 mb-1.5">Observação</label>
-              <textarea v-model="editForm.obs" rows="2" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none" />
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">Observação</label>
+              <textarea v-model="editForm.obs" rows="2" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none" />
             </div>
             <p v-if="editError" class="text-red-500 text-xs">{{ editError }}</p>
           </div>
           <div class="flex gap-3 px-5 pb-5">
-            <button @click="editingReceivable = null" class="flex-1 border border-slate-200 text-slate-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button @click="editingReceivable = null" class="flex-1 border border-stone-200 text-stone-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-stone-50/50">Cancelar</button>
             <button @click="saveEditReceivable" :disabled="editSaving" class="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-bold py-2.5 rounded-lg transition-colors">
               {{ editSaving ? 'Salvando...' : 'Salvar Alterações' }}
             </button>
@@ -232,7 +232,7 @@ onMounted(() => {
     <Teleport to="body">
       <div v-if="viewingReceivable" class="fixed inset-0 z-[90] flex items-center justify-center p-4" @click.self="viewingReceivable = null">
         <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="viewingReceivable = null" />
-        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-[500px] overflow-hidden">
+        <div class="relative glass-strong rounded-2xl w-full max-w-[500px] overflow-hidden">
           <div class="px-7 py-5 bg-gradient-to-br from-[#064e3b] to-[#065f46] flex items-center justify-between">
             <div>
               <h3 class="m-0 text-[15px] font-bold text-white">Detalhes — Conta a Receber</h3>
@@ -282,11 +282,11 @@ onMounted(() => {
             </div>
             <div v-if="viewingReceivable.obs" class="col-span-2">
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Observação</div>
-              <div class="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 border border-slate-100">{{ viewingReceivable.obs }}</div>
+              <div class="text-sm text-stone-600 rounded-lg p-3 bg-stone-50 border border-stone-100">{{ viewingReceivable.obs }}</div>
             </div>
           </div>
-          <div class="px-7 py-4 border-t border-slate-100 flex justify-end">
-            <button @click="viewingReceivable = null" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition-colors">Fechar</button>
+          <div class="px-7 py-4 border-t border-stone-100 flex justify-end">
+            <button @click="viewingReceivable = null" class="px-5 py-2 bg-stone-100/70 hover:bg-stone-100 text-stone-700 text-sm font-semibold rounded-lg transition-colors">Fechar</button>
           </div>
         </div>
       </div>

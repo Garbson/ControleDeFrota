@@ -67,12 +67,12 @@ function initChart() {
       scales: {
         y: {
           beginAtZero: true,
-          grid: { color: '#f1f5f9' },
-          ticks: { color: '#94a3b8', font: { size: 11 } },
+          grid: { color: 'rgba(0,0,0,0.06)' },
+          ticks: { color: '#78716c', font: { size: 11 } },
         },
         x: {
           grid: { display: false },
-          ticks: { color: '#64748b', font: { size: 11 } },
+          ticks: { color: '#78716c', font: { size: 11 } },
         },
       },
     },
@@ -140,11 +140,11 @@ watch(topDrivers, () => nextTick(initChart))
 
       <!-- Chart + Ranking -->
       <div class="grid grid-cols-[1fr_340px] gap-3.5 mb-5">
-        <div class="bg-white rounded-xl p-[22px] border border-slate-200">
+        <div class="glass rounded-xl p-[22px]">
           <div class="flex justify-between items-center mb-4">
             <div>
-              <h3 class="m-0 text-sm font-bold text-slate-900">Consumo de Pneus por Motorista</h3>
-              <p class="m-0 mt-0.5 text-[11.5px] text-slate-400">Total distribuído no período</p>
+              <h3 class="m-0 text-sm font-bold text-stone-800">Consumo de Pneus por Motorista</h3>
+              <p class="m-0 mt-0.5 text-[11.5px]" style="color:#78716c">Total distribuído no período</p>
             </div>
             <div class="flex gap-1">
               <button class="sbtn" :class="{ on: chartOrder === 'desc' }" @click="setChartOrder('desc')">↓ Maior</button>
@@ -153,52 +153,52 @@ watch(topDrivers, () => nextTick(initChart))
             </div>
           </div>
           <canvas ref="chartCanvas" class="!max-h-[260px]" />
-          <div v-if="!topDrivers.length" class="text-center text-slate-400 text-xs py-8">Nenhum dado disponível</div>
+          <div v-if="!topDrivers.length" class="text-center text-xs py-8" style="color:#a8a29e">Nenhum dado disponível</div>
         </div>
 
         <!-- Ranking -->
-        <div class="bg-white rounded-xl p-[22px] border border-slate-200 flex flex-col">
-          <h3 class="m-0 mb-3.5 text-sm font-bold text-slate-900">Ranking de Consumo</h3>
+        <div class="glass rounded-xl p-[22px] flex flex-col">
+          <h3 class="m-0 mb-3.5 text-sm font-bold text-stone-800">Ranking de Consumo</h3>
           <div v-for="(d, i) in topDrivers" :key="d.name" class="mb-[13px]">
             <div class="flex justify-between items-center mb-1">
               <div class="flex items-center gap-2">
                 <div
                   class="w-[22px] h-[22px] rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0"
                   :style="{
-                    background: i === 0 ? '#f59e0b' : i === 1 ? '#94a3b8' : i === 2 ? '#d97706' : '#f1f5f9',
-                    color: i < 3 ? 'white' : '#64748b'
+                    background: i === 0 ? '#f59e0b' : i === 1 ? 'rgba(100,116,139,0.2)' : i === 2 ? '#d97706' : 'rgba(0,0,0,0.06)',
+                    color: i < 3 ? 'white' : '#78716c'
                   }"
                 >
                   {{ i + 1 }}
                 </div>
                 <div>
-                  <div class="text-xs font-semibold text-slate-700 leading-tight">{{ d.name }}</div>
+                  <div class="text-xs font-semibold leading-tight" style="color:#1c1917">{{ d.name }}</div>
                 </div>
               </div>
-              <span class="text-[13px] font-extrabold text-slate-900">{{ d.tires }}</span>
+              <span class="text-[13px] font-extrabold text-stone-800">{{ d.tires }}</span>
             </div>
             <div class="pbg">
-              <div class="pfill" :style="{ width: `${(d.tires / maxTires) * 100}%`, background: i === 0 ? '#f59e0b' : i === 1 ? '#2563eb' : i === 2 ? '#10b981' : '#94a3b8' }" />
+              <div class="pfill" :style="{ width: `${(d.tires / maxTires) * 100}%`, background: i === 0 ? '#f59e0b' : i === 1 ? '#2563eb' : i === 2 ? '#10b981' : 'rgba(148,163,184,0.4)' }" />
             </div>
           </div>
-          <div v-if="!topDrivers.length" class="text-xs text-slate-400 text-center py-8">Nenhum motorista com pneus distribuídos</div>
-          <div v-if="topDrivers.length" class="mt-auto pt-3 border-t border-slate-50 text-[11.5px] text-slate-400 text-center">
-            Máx. registrado: <strong class="text-amber-500">{{ topDrivers[0]?.name }} — {{ topDrivers[0]?.tires }} pneus</strong>
+          <div v-if="!topDrivers.length" class="text-xs text-center py-8" style="color:#a8a29e">Nenhum motorista com pneus distribuídos</div>
+          <div v-if="topDrivers.length" class="mt-auto pt-3 text-[11.5px] text-center" style="border-top:1px solid rgba(0,0,0,0.06);color:#78716c">
+            Máx. registrado: <strong class="text-amber-400">{{ topDrivers[0]?.name }} — {{ topDrivers[0]?.tires }} pneus</strong>
           </div>
         </div>
       </div>
 
       <!-- Recent Movements -->
-      <div class="bg-white rounded-xl border border-slate-200">
-        <div class="px-[22px] py-[18px] border-b border-slate-50 flex justify-between items-center">
-          <h3 class="m-0 text-sm font-bold text-slate-900">Últimas Movimentações</h3>
+      <div class="glass rounded-xl">
+        <div class="px-[22px] py-[18px] flex justify-between items-center" style="border-bottom:1px solid rgba(0,0,0,0.06)">
+          <h3 class="m-0 text-sm font-bold text-stone-800">Últimas Movimentações</h3>
           <div class="flex gap-1">
             <button class="sbtn" :class="{ on: mvFilter === 'all' }" @click="mvFilter = 'all'">Todas</button>
             <button class="sbtn" :class="{ on: mvFilter === 'entrada' }" @click="mvFilter = 'entrada'">↓ Entradas</button>
             <button class="sbtn" :class="{ on: mvFilter === 'saida' }" @click="mvFilter = 'saida'">↑ Saídas</button>
           </div>
         </div>
-        <div v-if="!filteredMovements.length" class="text-center text-slate-400 text-xs py-8">Nenhuma movimentação encontrada</div>
+        <div v-if="!filteredMovements.length" class="text-center text-xs py-8" style="color:#a8a29e">Nenhuma movimentação encontrada</div>
         <table v-else class="w-full border-collapse">
           <thead>
             <tr>
@@ -210,21 +210,22 @@ watch(topDrivers, () => nextTick(initChart))
             <tr class="trow" v-for="m in filteredMovements" :key="m.id">
               <td class="td font-medium whitespace-nowrap">{{ m.mov_date }}</td>
               <td class="td">
-                <span class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold" :class="m.type === 'entrada' ? 'bg-green-100 text-green-600' : 'bg-orange-50 text-orange-600'">
+                <span class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold"
+                  :style="m.type === 'entrada' ? 'background:rgba(16,185,129,0.12);color:#059669' : 'background:rgba(249,115,22,0.12);color:#c2410c'">
                   {{ m.type === 'entrada' ? '↓ Entrada' : '↑ Saída' }}
                 </span>
               </td>
               <td class="td">
-                <div class="font-semibold text-slate-900 text-xs">{{ m.driver_name || '—' }}</div>
-                <div class="text-[10.5px] text-slate-400">{{ m.vehicle_plate || '—' }}</div>
+                <div class="font-semibold text-xs text-stone-800">{{ m.driver_name || '—' }}</div>
+                <div class="text-[10.5px]" style="color:#a8a29e">{{ m.vehicle_plate || '—' }}</div>
               </td>
               <td class="td text-xs">{{ m.item_name || '—' }}</td>
-              <td class="td font-bold text-slate-900">{{ m.qty }}</td>
-              <td class="td font-bold text-slate-900 whitespace-nowrap">
+              <td class="td font-bold text-stone-800">{{ m.qty }}</td>
+              <td class="td font-bold text-stone-800 whitespace-nowrap">
                 {{ m.total_value ? `R$ ${Number(m.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—' }}
               </td>
               <td class="td">
-                <span class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold bg-blue-100 text-blue-700">Registrado</span>
+                <span class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold" style="background:rgba(37,99,235,0.10);color:#1d4ed8">Registrado</span>
               </td>
             </tr>
           </tbody>

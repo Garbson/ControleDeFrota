@@ -322,15 +322,15 @@ onMounted(() => {
     </div>
 
     <!-- Toolbar -->
-    <div class="bg-white rounded-[11px] py-3.5 px-[18px] border border-slate-200 mb-3.5 flex gap-2.5 items-center flex-wrap">
+    <div class="glass rounded-[11px] py-3.5 px-[18px] mb-3.5 flex gap-2.5 items-center flex-wrap">
       <span class="text-xs font-bold text-slate-500">ORDENAR:</span>
       <button class="sbtn" :class="{ on: tripsSort === 'data-desc' }"   @click="tripsSort = 'data-desc'">↓ Mais recentes</button>
       <button class="sbtn" :class="{ on: tripsSort === 'data-asc' }"    @click="tripsSort = 'data-asc'">↑ Mais antigos</button>
       <button class="sbtn" :class="{ on: tripsSort === 'lucro-desc' }"  @click="tripsSort = 'lucro-desc'">↓ Maior lucro</button>
       <button class="sbtn" :class="{ on: tripsSort === 'lucro-asc' }"   @click="tripsSort = 'lucro-asc'">↑ Menor lucro</button>
-      <span class="border-l border-slate-200 h-5 mx-1" />
+      <span class="border-l border-stone-200 h-5 mx-1" />
       <span class="text-xs font-bold text-slate-500">MOTORISTA:</span>
-      <select v-model="filterDriver" class="text-xs border border-slate-200 rounded-md px-2 py-1.5">
+      <select v-model="filterDriver" class="text-xs border border-stone-200 rounded-md px-2 py-1.5">
         <option value="">Todos</option>
         <option v-for="d in drivers" :key="d.id" :value="d.id">{{ d.name }}</option>
       </select>
@@ -346,7 +346,7 @@ onMounted(() => {
     <div v-if="loading" class="flex items-center justify-center py-10 text-slate-400 text-sm">Carregando...</div>
 
     <!-- Tabela -->
-    <div v-else class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div v-else class="glass rounded-xl overflow-hidden">
       <table class="w-full border-collapse">
         <thead>
           <tr>
@@ -364,32 +364,32 @@ onMounted(() => {
         </thead>
         <tbody>
           <tr
-            class="trow cursor-pointer hover:bg-slate-50"
+            class="trow cursor-pointer hover:bg-stone-50"
             v-for="t in filteredItems"
             :key="t.id"
             @click="openDetail(t)"
           >
             <td class="td whitespace-nowrap">
-              <div class="font-medium text-slate-900">{{ fmtDate(t.start_date) }}</div>
+              <div class="font-medium text-stone-800">{{ fmtDate(t.start_date) }}</div>
               <div v-if="t.end_date" class="text-[10px] text-slate-400">→ {{ fmtDate(t.end_date) }}</div>
             </td>
-            <td class="td font-semibold text-slate-900 text-xs">{{ t.driver_name }}</td>
+            <td class="td font-semibold text-stone-800 text-xs">{{ t.driver_name }}</td>
             <td class="td">
               <span v-if="t.truck_plate" class="font-mono text-xs font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded">{{ t.truck_plate }}</span>
               <span v-else class="text-slate-400 text-xs">—</span>
             </td>
             <td class="td text-xs">
-              <div class="text-slate-900 font-medium">{{ t.origin }}</div>
+              <div class="text-stone-800 font-medium">{{ t.origin }}</div>
               <div class="text-slate-400 text-[10px]">→ {{ t.destination }}</div>
             </td>
-            <td class="td text-xs text-slate-600">{{ t.cargo || '—' }}</td>
-            <td class="td text-right font-bold text-slate-900">{{ t.distance > 0 ? fmtInt(t.distance) : '—' }}</td>
+            <td class="td text-xs text-stone-600">{{ t.cargo || '—' }}</td>
+            <td class="td text-right font-bold text-stone-800">{{ t.distance > 0 ? fmtInt(t.distance) : '—' }}</td>
             <td class="td text-right font-semibold text-xs" :class="t.avg_consumption ? 'text-green-700' : 'text-slate-400'">
               {{ t.avg_consumption ? t.avg_consumption : '—' }}
             </td>
             <td class="td text-right">
               <div v-if="t.freight_value > 0">
-                <div class="font-extrabold text-slate-900">R$ {{ fmt(t.freight_value) }}</div>
+                <div class="font-extrabold text-stone-800">R$ {{ fmt(t.freight_value) }}</div>
                 <span
                   class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
                   :class="t.freight_status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'"
@@ -421,7 +421,7 @@ onMounted(() => {
     <!-- Modal Form -->
     <Teleport to="body">
       <div v-if="showForm" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" @click.self="showForm = false">
-        <div class="bg-white rounded-xl w-[600px] max-h-[92vh] overflow-y-auto shadow-2xl">
+        <div class="glass-strong rounded-xl w-[600px] max-h-[92vh] overflow-y-auto">
           <div class="bg-gradient-to-br from-[#1a1f2e] to-[#1e293b] px-6 py-5 rounded-t-xl">
             <h3 class="m-0 text-[15px] font-bold text-white">{{ editingId ? 'Editar Viagem' : 'Nova Viagem' }}</h3>
             <p class="mt-1 mb-0 text-xs text-slate-400">Preencha os dados da viagem</p>
@@ -431,9 +431,9 @@ onMounted(() => {
             <!-- Seção: Viagem -->
             <div>
               <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span class="h-px flex-1 bg-slate-100" />
+                <span class="h-px flex-1 bg-stone-100/70" />
                 Dados da Viagem
-                <span class="h-px flex-1 bg-slate-100" />
+                <span class="h-px flex-1 bg-stone-100/70" />
               </div>
               <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -491,9 +491,9 @@ onMounted(() => {
             <!-- Seção: Frete -->
             <div>
               <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span class="h-px flex-1 bg-slate-100" />
+                <span class="h-px flex-1 bg-stone-100/70" />
                 Frete / Receita
-                <span class="h-px flex-1 bg-slate-100" />
+                <span class="h-px flex-1 bg-stone-100/70" />
               </div>
               <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -515,7 +515,7 @@ onMounted(() => {
                     class="flex-1 py-2 rounded-lg text-xs font-bold border-2 transition-all"
                     :class="form.freight_status === 'a_receber'
                       ? 'border-amber-400 bg-amber-50 text-amber-700'
-                      : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'"
+                      : 'border-stone-200 bg-white text-slate-500 hover:border-slate-300'"
                     @click="form.freight_status = 'a_receber'"
                   >
                     Lançar em Contas a Receber
@@ -525,7 +525,7 @@ onMounted(() => {
                     class="flex-1 py-2 rounded-lg text-xs font-bold border-2 transition-all"
                     :class="form.freight_status === 'pago'
                       ? 'border-green-400 bg-green-50 text-green-700'
-                      : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'"
+                      : 'border-stone-200 bg-white text-slate-500 hover:border-slate-300'"
                     @click="form.freight_status = 'pago'"
                   >
                     Já Recebido
@@ -537,15 +537,15 @@ onMounted(() => {
             <!-- Seção: Trechos -->
             <div>
               <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span class="h-px flex-1 bg-slate-100" />
+                <span class="h-px flex-1 bg-stone-100/70" />
                 Trechos
-                <span class="h-px flex-1 bg-slate-100" />
+                <span class="h-px flex-1 bg-stone-100/70" />
               </div>
               <p v-if="formLegs.length" class="text-[10px] text-blue-600 bg-blue-50 rounded px-2 py-1 mb-3">
                 O frete total da viagem será calculado pela soma dos fretes dos trechos.
               </p>
               <div v-if="formLegs.length" class="space-y-2 mb-3">
-                <div v-for="(leg, i) in formLegs" :key="leg._key" class="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <div v-for="(leg, i) in formLegs" :key="leg._key" class="bg-stone-50/50 border border-stone-200 rounded-lg p-3">
                   <div class="flex items-center justify-between mb-2">
                     <span class="text-[10px] font-bold text-slate-500 uppercase">Trecho {{ i + 1 }}</span>
                     <button type="button" @click="removeFormLeg(i)" class="text-slate-400 hover:text-red-600 p-0.5">
@@ -573,17 +573,17 @@ onMounted(() => {
                   <div v-if="Number(leg.freight_value) > 0" class="mt-2 flex gap-2">
                     <button type="button" @click="leg.freight_status = 'a_receber'"
                       class="flex-1 py-1 rounded-lg text-xs font-bold border transition"
-                      :class="leg.freight_status === 'a_receber' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-500 border-slate-200'"
+                      :class="leg.freight_status === 'a_receber' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-500 border-stone-200'"
                     >A Receber</button>
                     <button type="button" @click="leg.freight_status = 'pago'"
                       class="flex-1 py-1 rounded-lg text-xs font-bold border transition"
-                      :class="leg.freight_status === 'pago' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-slate-500 border-slate-200'"
+                      :class="leg.freight_status === 'pago' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-slate-500 border-stone-200'"
                     >Pago</button>
                   </div>
                 </div>
               </div>
               <button type="button" @click="addFormLeg"
-                class="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-500 hover:border-blue-400 hover:text-blue-600 transition flex items-center justify-center gap-1.5"
+                class="w-full py-2 border-2 border-dashed border-stone-200 rounded-lg text-xs text-slate-500 hover:border-blue-400 hover:text-blue-600 transition flex items-center justify-center gap-1.5"
               >
                 <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M19 13H13v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
                 Adicionar Trecho
@@ -599,7 +599,7 @@ onMounted(() => {
             <p v-if="formError" class="text-red-500 text-xs">{{ formError }}</p>
 
             <div class="pt-2 flex justify-between items-center">
-              <button @click="showForm = false" class="px-4 py-2 bg-transparent border border-slate-200 rounded-lg text-slate-500 text-xs font-semibold cursor-pointer">Cancelar</button>
+              <button @click="showForm = false" class="px-4 py-2 bg-transparent border border-stone-200 rounded-lg text-stone-600 text-xs font-semibold cursor-pointer">Cancelar</button>
               <button @click="submitForm" class="btn-p" :disabled="!formValid || saving">
                 {{ saving ? 'Salvando...' : (editingId ? 'Atualizar Viagem' : 'Registrar Viagem') }}
               </button>
@@ -612,7 +612,7 @@ onMounted(() => {
     <!-- Modal Detalhe -->
     <Teleport to="body">
       <div v-if="showDetail" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" @click.self="showDetail = false">
-        <div class="bg-white rounded-xl w-[720px] max-h-[92vh] overflow-y-auto shadow-2xl">
+        <div class="glass-strong rounded-xl w-[720px] max-h-[92vh] overflow-y-auto">
           <div v-if="detailLoading" class="flex items-center justify-center py-16 text-slate-400 text-sm">Carregando detalhes...</div>
 
           <template v-else-if="detailTrip">
@@ -640,7 +640,7 @@ onMounted(() => {
               <!-- ── Trechos da Rota ── -->
               <div class="mb-5">
                 <div class="flex items-center justify-between mb-3">
-                  <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                  <h4 class="text-xs font-bold text-stone-600 uppercase tracking-wider flex items-center gap-2">
                     <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/></svg>
                     Trechos da Rota
                     <span class="text-[10px] font-normal text-slate-400">({{ detailTrip.legs?.length || 0 }} trechos)</span>
@@ -674,7 +674,7 @@ onMounted(() => {
                       >
                         <div class="w-2 h-2 rounded-full bg-white" />
                       </div>
-                      <div class="flex-1 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
+                      <div class="flex-1 rounded-lg px-3 py-2 bg-stone-50 border border-stone-100">
                         <div class="flex items-center justify-between">
                           <div class="flex-1 min-w-0">
                             <div class="text-xs font-bold text-slate-800">→ {{ leg.destination }}</div>
@@ -685,7 +685,7 @@ onMounted(() => {
                               <span v-if="leg.km_start && leg.km_end"> · {{ (Number(leg.km_end) - Number(leg.km_start)).toLocaleString('pt-BR') }} km</span>
                             </div>
                             <div v-if="leg.freight_value > 0" class="mt-1 flex items-center gap-1.5 flex-wrap">
-                              <span class="text-[10px] font-extrabold text-slate-700">R$ {{ fmt(leg.freight_value) }}</span>
+                              <span class="text-[10px] font-extrabold text-stone-600">R$ {{ fmt(leg.freight_value) }}</span>
                               <span v-if="leg.client" class="text-[10px] text-slate-500">· {{ leg.client }}</span>
                               <span
                                 class="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
@@ -706,7 +706,7 @@ onMounted(() => {
                     </div>
                   </div>
                 </div>
-                <div v-else class="text-center py-4 text-xs text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                <div v-else class="text-center py-4 text-xs text-slate-400 rounded-lg bg-stone-50 border border-dashed border-stone-200">
                   Nenhum trecho adicionado. Clique em "Novo Trecho" para registrar o percurso.
                 </div>
 
@@ -760,17 +760,17 @@ onMounted(() => {
                       type="button"
                       @click="legForm.freight_status = 'a_receber'"
                       class="flex-1 py-1.5 rounded-lg text-xs font-bold border transition"
-                      :class="legForm.freight_status === 'a_receber' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-500 border-slate-200'"
+                      :class="legForm.freight_status === 'a_receber' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-500 border-stone-200'"
                     >A Receber</button>
                     <button
                       type="button"
                       @click="legForm.freight_status = 'pago'"
                       class="flex-1 py-1.5 rounded-lg text-xs font-bold border transition"
-                      :class="legForm.freight_status === 'pago' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-slate-500 border-slate-200'"
+                      :class="legForm.freight_status === 'pago' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-slate-500 border-stone-200'"
                     >Pago</button>
                   </div>
                   <div class="flex gap-2 mt-3">
-                    <button @click="showLegForm = false; editingLeg = null" class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-500">Cancelar</button>
+                    <button @click="showLegForm = false; editingLeg = null" class="px-3 py-1.5 border border-stone-200 rounded-lg text-xs text-slate-500">Cancelar</button>
                     <button
                       @click="saveLeg"
                       :disabled="!legForm.origin || !legForm.destination || legSaving"
@@ -784,21 +784,21 @@ onMounted(() => {
 
               <!-- KPIs da viagem -->
               <div class="grid grid-cols-4 gap-3 mb-5">
-                <div class="bg-slate-50 rounded-lg p-3 text-center">
+                <div class="rounded-lg p-3 bg-stone-50 text-center">
                   <div class="text-[10px] font-bold text-slate-500 uppercase mb-1">Distância</div>
-                  <div class="text-lg font-extrabold text-slate-900">{{ detailTrip.distance > 0 ? fmtInt(detailTrip.distance) + ' km' : '—' }}</div>
+                  <div class="text-lg font-extrabold text-stone-800">{{ detailTrip.distance > 0 ? fmtInt(detailTrip.distance) + ' km' : '—' }}</div>
                 </div>
-                <div class="bg-slate-50 rounded-lg p-3 text-center">
+                <div class="rounded-lg p-3 bg-stone-50 text-center">
                   <div class="text-[10px] font-bold text-slate-500 uppercase mb-1">Média Diesel</div>
                   <div class="text-lg font-extrabold" :class="detailTrip.avg_consumption ? 'text-green-700' : 'text-slate-400'">
                     {{ detailTrip.avg_consumption ? detailTrip.avg_consumption + ' km/L' : '—' }}
                   </div>
                 </div>
-                <div class="bg-slate-50 rounded-lg p-3 text-center">
+                <div class="rounded-lg p-3 bg-stone-50 text-center">
                   <div class="text-[10px] font-bold text-slate-500 uppercase mb-1">
                     Frete<span v-if="detailTrip.legs?.length" class="ml-1 text-blue-500">({{ detailTrip.legs.length }} trechos)</span>
                   </div>
-                  <div class="text-lg font-extrabold text-slate-900">
+                  <div class="text-lg font-extrabold text-stone-800">
                     {{ detailTrip.revenue > 0 ? 'R$ ' + fmt(detailTrip.revenue) : '—' }}
                   </div>
                   <template v-if="detailTrip.legs?.length">
@@ -839,13 +839,13 @@ onMounted(() => {
                     <span class="text-[10px] font-normal text-slate-400">({{ detailTrip.fuel_records?.length || 0 }} abastecimentos)</span>
                   </h4>
                   <div v-if="detailTrip.fuel_records?.length" class="space-y-1.5 max-h-[180px] overflow-y-auto">
-                    <div v-for="f in detailTrip.fuel_records" :key="f.id" class="flex justify-between text-xs bg-slate-50 rounded px-3 py-2">
-                      <span class="text-slate-600">{{ fmtDate(f.fuel_date) }} — {{ f.liters }}L @ R${{ Number(f.price_liter).toFixed(3) }}</span>
-                      <span class="font-bold text-slate-700">R$ {{ fmt(f.total) }}</span>
+                    <div v-for="f in detailTrip.fuel_records" :key="f.id" class="flex justify-between text-xs rounded px-3 py-2 bg-stone-50">
+                      <span class="text-stone-600">{{ fmtDate(f.fuel_date) }} — {{ f.liters }}L @ R${{ Number(f.price_liter).toFixed(3) }}</span>
+                      <span class="font-bold text-stone-600">R$ {{ fmt(f.total) }}</span>
                     </div>
                   </div>
                   <div v-else class="text-xs text-slate-400 py-2">Nenhum abastecimento no período</div>
-                  <div v-if="detailTrip.fuel_total > 0" class="text-xs font-extrabold text-slate-900 mt-2 text-right">
+                  <div v-if="detailTrip.fuel_total > 0" class="text-xs font-extrabold text-stone-800 mt-2 text-right">
                     Total: R$ {{ fmt(detailTrip.fuel_total) }} · {{ Number(detailTrip.fuel_liters).toLocaleString('pt-BR') }} L
                   </div>
                 </div>
@@ -860,7 +860,7 @@ onMounted(() => {
                     <div v-for="e in detailTrip.payable_expenses" :key="e.id"
                       class="flex justify-between items-center text-xs bg-orange-50 border border-orange-100 rounded px-3 py-2">
                       <div>
-                        <span class="font-medium text-slate-700">{{ e.description || e.category }}</span>
+                        <span class="font-medium text-stone-600">{{ e.description || e.category }}</span>
                         <span class="text-slate-400 ml-1">· {{ e.driver_name || '—' }}</span>
                       </div>
                       <div class="text-right">
@@ -872,19 +872,19 @@ onMounted(() => {
                     </div>
                   </div>
                   <div v-else class="text-xs text-slate-400 py-2">Nenhuma despesa lançada</div>
-                  <div v-if="detailTrip.payable_expenses_total > 0" class="text-xs font-extrabold text-slate-900 mt-2 text-right">
+                  <div v-if="detailTrip.payable_expenses_total > 0" class="text-xs font-extrabold text-stone-800 mt-2 text-right">
                     Total: R$ {{ fmt(detailTrip.payable_expenses_total) }}
                   </div>
                 </div>
               </div>
 
               <!-- Observações -->
-              <div v-if="detailTrip.obs" class="mt-4 bg-slate-50 rounded-lg px-4 py-3 text-xs text-slate-600">
+              <div v-if="detailTrip.obs" class="mt-4 rounded-lg px-4 py-3 bg-stone-50 text-xs text-stone-600">
                 <span class="font-bold text-slate-500 uppercase text-[10px]">Obs:</span> {{ detailTrip.obs }}
               </div>
 
               <!-- Resumo final -->
-              <div class="mt-5 pt-4 border-t border-slate-100 grid grid-cols-3 gap-3 text-center">
+              <div class="mt-5 pt-4 border-t border-stone-100 grid grid-cols-3 gap-3 text-center">
                 <div>
                   <div class="text-[10px] text-slate-500 uppercase font-bold">Gastos</div>
                   <div class="text-sm font-extrabold text-red-600">— R$ {{ fmt(detailTrip.total_cost) }}</div>

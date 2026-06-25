@@ -173,7 +173,7 @@ onMounted(() => {
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-[11px] py-3 px-[18px] border border-slate-200 mb-3.5 flex gap-2.5 items-center flex-wrap">
+    <div class="glass rounded-[11px] py-3 px-[18px] mb-3.5 flex gap-2.5 items-center flex-wrap">
       <span class="text-xs font-bold text-slate-500">FILTRAR:</span>
       <button class="sbtn" :class="{ on: sFilter === 'all' }" @click="sFilter = 'all'">Todos</button>
       <button class="sbtn" :class="{ on: sFilter === 'novo' }" @click="sFilter = 'novo'">Novos</button>
@@ -197,7 +197,7 @@ onMounted(() => {
     <div v-if="loading" class="flex items-center justify-center py-10 text-slate-400 text-sm">Carregando...</div>
 
     <!-- Stock Table -->
-    <div v-else class="bg-white rounded-xl border border-slate-200 overflow-hidden mb-5">
+    <div v-else class="glass rounded-xl overflow-hidden mb-5">
       <table class="w-full border-collapse">
         <thead>
           <tr>
@@ -213,7 +213,7 @@ onMounted(() => {
         <tbody>
           <tr class="trow" v-for="s in filteredStock" :key="s.id">
             <td class="td">
-              <div class="font-bold text-slate-900 text-[13px]">{{ s.description }}</div>
+              <div class="font-bold text-stone-800 text-[13px]">{{ s.description }}</div>
               <div v-if="s.brand" class="text-[10.5px] text-slate-400 mt-px">{{ s.brand }}</div>
             </td>
             <td class="td">
@@ -222,7 +222,7 @@ onMounted(() => {
               </span>
             </td>
             <td class="td">
-              <span class="text-[22px] font-extrabold text-slate-900">{{ s.qty }}</span>
+              <span class="text-[22px] font-extrabold text-stone-800">{{ s.qty }}</span>
               <span class="text-[11px] text-slate-400"> un</span>
             </td>
             <td class="td min-w-[110px]">
@@ -234,7 +234,7 @@ onMounted(() => {
               </div>
             </td>
             <td class="td">
-              <span v-if="s.nf_number" class="font-mono text-[11.5px] bg-slate-100 px-2 py-[3px] rounded-[5px] text-slate-600 font-bold">NF {{ s.nf_number }}</span>
+              <span v-if="s.nf_number" class="font-mono text-[11.5px] bg-stone-100/70 px-2 py-[3px] rounded-[5px] text-stone-600 font-bold">NF {{ s.nf_number }}</span>
               <span v-else class="text-slate-400 text-xs">—</span>
             </td>
             <td class="td text-slate-500 text-xs">{{ s.entry_date || '—' }}</td>
@@ -248,9 +248,9 @@ onMounted(() => {
     </div>
 
     <!-- Recent Movements -->
-    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      <div class="px-[22px] py-[17px] border-b border-slate-50 flex items-center justify-between">
-        <h3 class="m-0 text-sm font-bold text-slate-900">Movimentações Recentes</h3>
+    <div class="glass rounded-xl overflow-hidden">
+      <div class="px-[22px] py-[17px] border-b border-stone-100 flex items-center justify-between">
+        <h3 class="m-0 text-sm font-bold text-stone-800">Movimentações Recentes</h3>
         <span class="text-xs text-slate-400">Entradas e saídas de estoque</span>
       </div>
       <table class="w-full border-collapse">
@@ -272,9 +272,9 @@ onMounted(() => {
             <td class="td text-xs">{{ m.driver_name || '—' }}</td>
             <td class="td">
               <span v-if="m.vehicle_plate" class="font-mono text-[11px] font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded">{{ m.vehicle_plate }}</span>
-              <span v-else class="text-slate-300 text-xs">—</span>
+              <span v-else class="text-stone-600 text-xs">—</span>
             </td>
-            <td class="td font-bold text-slate-900">{{ m.qty }}</td>
+            <td class="td font-bold text-stone-800">{{ m.qty }}</td>
             <td class="td text-xs text-slate-500 max-w-[180px] truncate">{{ m.obs || '—' }}</td>
           </tr>
         </tbody>
@@ -285,7 +285,7 @@ onMounted(() => {
     <!-- Exit Modal -->
     <Teleport to="body">
       <div v-if="exitModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" @click.self="exitModal = null">
-        <div class="bg-white rounded-xl w-[420px] shadow-2xl">
+        <div class="glass-strong rounded-xl w-[420px]">
           <div class="bg-gradient-to-br from-[#1a1f2e] to-[#1e293b] px-6 py-5 rounded-t-xl">
             <h3 class="m-0 text-[15px] font-bold text-white">📦 Registrar Saída</h3>
             <p class="mt-1 mb-0 text-xs text-slate-400">{{ exitModal.description }} — {{ exitModal.brand || '' }}</p>
@@ -325,8 +325,8 @@ onMounted(() => {
                 <input v-model="exitForm.obs" type="text" placeholder="Ex: troca preventiva dianteiro..." class="finput" />
               </div>
             </div>
-            <div class="mt-5 pt-4 border-t border-slate-50 flex justify-between items-center">
-              <button @click="exitModal = null" class="px-4 py-2 bg-transparent border border-slate-200 rounded-lg text-slate-500 text-xs font-semibold cursor-pointer">Cancelar</button>
+            <div class="mt-5 pt-4 border-t border-stone-100 flex justify-between items-center">
+              <button @click="exitModal = null" class="px-4 py-2 bg-transparent border border-stone-200 rounded-lg text-stone-600 text-xs font-semibold cursor-pointer">Cancelar</button>
               <button @click="confirmExit" class="btn-p" :disabled="!exitForm.qty">Confirmar Saída</button>
             </div>
           </div>
@@ -337,7 +337,7 @@ onMounted(() => {
     <!-- Entry Modal -->
     <Teleport to="body">
       <div v-if="showEntryModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" @click.self="showEntryModal = false">
-        <div class="bg-white rounded-xl w-[480px] shadow-2xl">
+        <div class="glass-strong rounded-xl w-[480px]">
           <div class="bg-gradient-to-br from-green-700 to-green-900 px-6 py-5 rounded-t-xl">
             <h3 class="m-0 text-[15px] font-bold text-white">📦 Nova Entrada de Pneus</h3>
             <p class="mt-1 mb-0 text-xs text-green-200">Registrar entrada no estoque</p>
@@ -348,14 +348,14 @@ onMounted(() => {
               <button
                 @click="entryMode = 'existing'"
                 class="flex-1 py-2 rounded-lg text-xs font-semibold border-2 transition-colors"
-                :class="entryMode === 'existing' ? 'border-green-600 bg-green-50 text-green-700' : 'border-slate-200 text-slate-500'"
+                :class="entryMode === 'existing' ? 'border-green-600 bg-green-50 text-green-700' : 'border-stone-200 text-slate-500'"
               >
                 Item Existente
               </button>
               <button
                 @click="entryMode = 'new'"
                 class="flex-1 py-2 rounded-lg text-xs font-semibold border-2 transition-colors"
-                :class="entryMode === 'new' ? 'border-green-600 bg-green-50 text-green-700' : 'border-slate-200 text-slate-500'"
+                :class="entryMode === 'new' ? 'border-green-600 bg-green-50 text-green-700' : 'border-stone-200 text-slate-500'"
               >
                 Novo Item
               </button>
@@ -373,11 +373,11 @@ onMounted(() => {
                 </select>
               </div>
               <!-- Prévia do item selecionado -->
-              <div v-if="selectedStockItem" class="bg-slate-50 rounded-lg p-3 border border-slate-200">
+              <div v-if="selectedStockItem" class="rounded-lg p-3 bg-stone-50 border border-stone-200">
                 <div class="text-[10px] font-bold text-slate-400 uppercase mb-1">Item selecionado</div>
                 <div class="flex justify-between items-center">
                   <div>
-                    <div class="text-sm font-bold text-slate-900">{{ selectedStockItem.description }}</div>
+                    <div class="text-sm font-bold text-stone-800">{{ selectedStockItem.description }}</div>
                     <div class="text-[11px] text-slate-500">{{ selectedStockItem.brand || '—' }} · Estoque atual: <strong>{{ selectedStockItem.qty }}</strong> un</div>
                   </div>
                   <span class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold" :class="selectedStockItem.status === 'novo' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'">
@@ -409,14 +409,14 @@ onMounted(() => {
                   <button
                     @click="entryForm.status = 'novo'"
                     class="flex-1 py-2 rounded-lg text-xs font-semibold border-2 transition-colors"
-                    :class="entryForm.status === 'novo' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500'"
+                    :class="entryForm.status === 'novo' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-stone-200 text-slate-500'"
                   >
                     Novo
                   </button>
                   <button
                     @click="entryForm.status = 'recapado'"
                     class="flex-1 py-2 rounded-lg text-xs font-semibold border-2 transition-colors"
-                    :class="entryForm.status === 'recapado' ? 'border-amber-600 bg-amber-50 text-amber-700' : 'border-slate-200 text-slate-500'"
+                    :class="entryForm.status === 'recapado' ? 'border-amber-600 bg-amber-50 text-amber-700' : 'border-stone-200 text-slate-500'"
                   >
                     Recapado
                   </button>
@@ -429,7 +429,7 @@ onMounted(() => {
             </div>
 
             <!-- Campos comuns (qtd, data, obs) -->
-            <div class="space-y-4 mt-4 pt-4 border-t border-slate-100">
+            <div class="space-y-4 mt-4 pt-4 border-t border-stone-100">
               <div class="grid grid-cols-2 gap-3">
                 <div>
                   <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Quantidade *</label>
@@ -446,8 +446,8 @@ onMounted(() => {
               </div>
             </div>
 
-            <div class="mt-5 pt-4 border-t border-slate-50 flex justify-between items-center">
-              <button @click="showEntryModal = false" class="px-4 py-2 bg-transparent border border-slate-200 rounded-lg text-slate-500 text-xs font-semibold cursor-pointer">Cancelar</button>
+            <div class="mt-5 pt-4 border-t border-stone-100 flex justify-between items-center">
+              <button @click="showEntryModal = false" class="px-4 py-2 bg-transparent border border-stone-200 rounded-lg text-stone-600 text-xs font-semibold cursor-pointer">Cancelar</button>
               <button
                 @click="confirmEntry"
                 class="btn-p !bg-green-600 hover:!bg-green-700"

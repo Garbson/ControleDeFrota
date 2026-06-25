@@ -17,12 +17,12 @@ defineProps({
     <div class="flex justify-between items-start">
       <div class="flex-1">
         <div
-          class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider"
+          class="text-[10.5px] font-bold uppercase tracking-wider" style="color:#78716c"
         >
           {{ title }}
         </div>
         <div
-          class="font-extrabold text-slate-900 mt-1.5 leading-tight"
+          class="font-extrabold text-stone-800 mt-1.5 leading-tight"
           :class="
             typeof value === 'string' && value.length > 10
               ? 'text-2xl'

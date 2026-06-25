@@ -64,13 +64,13 @@ onMounted(async () => {
   <!-- Aguardar verificação de auth -->
   <div
     v-if="!authChecked"
-    class="min-h-screen flex items-center justify-center bg-slate-900"
+    class="min-h-screen flex items-center justify-center bg-[#f5f0e8]"
   >
     <div class="text-center">
       <div
         class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"
       ></div>
-      <p class="text-slate-400 text-sm">Carregando...</p>
+      <p class="text-stone-400 text-sm">Carregando...</p>
     </div>
   </div>
 
@@ -80,7 +80,7 @@ onMounted(async () => {
   <!-- App principal -->
   <div
     v-else
-    class="flex h-screen overflow-hidden print:block print:h-auto print:overflow-visible"
+    class="app-root relative flex h-screen overflow-hidden p-3 gap-3 print:block print:h-auto print:overflow-visible print:p-0 print:gap-0"
   >
     <AppSidebar
       :current-view="currentView"
@@ -88,7 +88,7 @@ onMounted(async () => {
       @logout="handleLogout"
       class="no-print"
     />
-    <main class="flex-1 overflow-hidden flex flex-col print:overflow-visible">
+    <main class="relative flex-1 overflow-hidden flex flex-col rounded-2xl glass-main print:overflow-visible print:rounded-none print:bg-white print:border-0">
       <AppTopbar
         :current-view="currentView"
         @navigate="navigate"

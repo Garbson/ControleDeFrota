@@ -148,10 +148,10 @@ watch(vehicleTypes, () => nextTick(initPie));
 
       <div class="grid grid-cols-2 gap-3.5 mb-5">
         <!-- Cost Ranking -->
-        <div class="bg-white rounded-xl p-[22px] border border-slate-200">
+        <div class="glass rounded-xl p-[22px] border border-stone-200">
           <div class="flex justify-between items-center mb-4">
             <div>
-              <h3 class="m-0 text-sm font-bold text-slate-900">
+              <h3 class="m-0 text-sm font-bold text-stone-800">
                 Custo Estimado por Motorista
               </h3>
               <p class="m-0 mt-0.5 text-[11.5px] text-slate-400">
@@ -177,11 +177,11 @@ watch(vehicleTypes, () => nextTick(initPie));
           </div>
           <div v-for="d in costRanking" :key="d.id" class="mb-[11px]">
             <div class="flex justify-between items-center mb-[3px]">
-              <span class="text-xs font-semibold text-slate-700">{{
+              <span class="text-xs font-semibold text-stone-600">{{
                 d.name
               }}</span>
               <div class="text-right">
-                <span class="text-xs font-extrabold text-slate-900"
+                <span class="text-xs font-extrabold text-stone-800"
                   >R$ {{ fmt(d.cost) }}</span
                 >
                 <span class="text-[10px] text-slate-400 ml-1.5"
@@ -213,8 +213,8 @@ watch(vehicleTypes, () => nextTick(initPie));
         </div>
 
         <!-- Vehicle Types Pie -->
-        <div class="bg-white rounded-xl p-[22px] border border-slate-200">
-          <h3 class="m-0 mb-4 text-sm font-bold text-slate-900">
+        <div class="glass rounded-xl p-[22px] border border-stone-200">
+          <h3 class="m-0 mb-4 text-sm font-bold text-stone-800">
             Tipo de Carroceria
           </h3>
           <div class="flex justify-center">
@@ -224,7 +224,7 @@ watch(vehicleTypes, () => nextTick(initPie));
             <div
               v-for="(t, i) in vehicleTypes"
               :key="t.label"
-              class="flex items-center gap-2 bg-slate-50 rounded-md px-3 py-2"
+              class="flex items-center gap-2 bg-stone-50/50 rounded-md px-3 py-2"
             >
               <div
                 class="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -240,7 +240,7 @@ watch(vehicleTypes, () => nextTick(initPie));
                 }"
               />
               <div>
-                <div class="text-[11px] font-bold text-slate-900">
+                <div class="text-[11px] font-bold text-stone-800">
                   {{ t.label }}
                 </div>
                 <div class="text-[10px] text-slate-400">
@@ -253,8 +253,8 @@ watch(vehicleTypes, () => nextTick(initPie));
       </div>
 
       <!-- Insights -->
-      <div class="bg-white rounded-xl p-[22px] border border-slate-200">
-        <h3 class="m-0 mb-4 text-sm font-bold text-slate-900">
+      <div class="glass rounded-xl p-[22px] border border-stone-200">
+        <h3 class="m-0 mb-4 text-sm font-bold text-stone-800">
           💡 Insights e Alertas
         </h3>
         <div class="grid grid-cols-3 gap-3">
@@ -264,7 +264,7 @@ watch(vehicleTypes, () => nextTick(initPie));
             </div>
             <div
               v-if="costRanking[0]"
-              class="text-[13px] font-semibold text-slate-900"
+              class="text-[13px] font-semibold text-stone-800"
             >
               {{ costRanking[0].name }}
             </div>
@@ -278,7 +278,7 @@ watch(vehicleTypes, () => nextTick(initPie));
             </div>
             <div
               v-if="bottomConsumer"
-              class="text-[13px] font-semibold text-slate-900"
+              class="text-[13px] font-semibold text-stone-800"
             >
               {{ bottomConsumer.name }}
             </div>
@@ -290,7 +290,7 @@ watch(vehicleTypes, () => nextTick(initPie));
             <div class="text-xs font-bold text-blue-700 mb-1.5">
               📊 Média da Frota
             </div>
-            <div class="text-[13px] font-semibold text-slate-900">
+            <div class="text-[13px] font-semibold text-stone-800">
               {{ avgTires }} pneus/motorista
             </div>
             <div class="text-[11.5px] text-slate-500 mt-1">
