@@ -8,6 +8,7 @@ RUN npm ci --only=production
 
 COPY src ./src
 COPY migrations ./migrations
+COPY uploads ./uploads
 
 EXPOSE 4000
 
