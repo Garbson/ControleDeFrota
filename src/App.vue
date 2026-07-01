@@ -14,6 +14,7 @@ import PayableView from "./components/views/PayableView.vue";
 import ReceivableView from "./components/views/ReceivableView.vue";
 import ReportView from "./components/views/ReportView.vue";
 import StockView from "./components/views/StockView.vue";
+import SuppliersView from "./components/views/SuppliersView.vue";
 import TripsView from "./components/views/TripsView.vue";
 import UsersView from "./components/views/UsersView.vue";
 import VehiclesView from "./components/views/VehiclesView.vue";
@@ -88,7 +89,9 @@ onMounted(async () => {
       @logout="handleLogout"
       class="no-print"
     />
-    <main class="relative flex-1 overflow-hidden flex flex-col rounded-2xl glass-main print:overflow-visible print:rounded-none print:bg-white print:border-0">
+    <main
+      class="relative flex-1 overflow-hidden flex flex-col rounded-2xl glass-main print:overflow-visible print:rounded-none print:bg-white print:border-0"
+    >
       <AppTopbar
         :current-view="currentView"
         @navigate="navigate"
@@ -113,6 +116,10 @@ onMounted(async () => {
         />
         <StockView
           v-else-if="currentView === 'stock'"
+          :show-toast="showToast"
+        />
+        <SuppliersView
+          v-else-if="currentView === 'suppliers'"
           :show-toast="showToast"
         />
         <FuelView v-else-if="currentView === 'fuel'" :show-toast="showToast" />

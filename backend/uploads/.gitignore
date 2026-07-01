@@ -1,0 +1,3 @@
+# Ignorar arquivos de upload, mas manter a estrutura de diretórios
+receipts/*
+!receipts/.gitkeep

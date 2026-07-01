@@ -1,10 +1,36 @@
 const router = require('express').Router()
 const { body, validationResult } = require('express-validator')
+const multer = require('multer')
+const path = require('path')
+const fs = require('fs')
 const { query } = require('../config/database')
 const { authenticate } = require('../middleware/auth')
 const { findActiveTrip } = require('../utils/findActiveTrip')
 
 router.use(authenticate)
+
+// ── Configuração do multer para comprovantes
+const receiptsDir = path.join(__dirname, '..', '..', 'uploads', 'receipts')
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, receiptsDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname)
+    const name = `receipt_${req.params.id}_${Date.now()}${ext}`
+    cb(null, name)
+  },
+})
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (req, file, cb) => {
+    const allowed = /\.(jpg|jpeg|png|pdf|webp)$/i
+    if (allowed.test(path.extname(file.originalname))) {
+      cb(null, true)
+    } else {
+      cb(new Error('Formato inválido. Use JPG, PNG, WEBP ou PDF.'))
+    }
+  },
+})
 
 // GET /payable
 router.get('/', async (req, res) => {
@@ -127,6 +153,45 @@ router.delete('/:id', async (req, res) => {
     res.json({ message: 'Conta removida' })
   } catch (err) {
     res.status(500).json({ error: 'Erro ao remover conta' })
+  }
+})
+
+// POST /payable/:id/receipt — upload de comprovante
+router.post('/:id/receipt', upload.single('receipt'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Nenhum arquivo enviado' })
+  }
+  const receiptUrl = `/uploads/receipts/${req.file.filename}`
+
+  try {
+    // Remove comprovante antigo se existir
+    const [current] = await query('SELECT receipt_url FROM accounts_payable WHERE id = ?', [req.params.id])
+    if (current?.receipt_url) {
+      const oldPath = path.join(__dirname, '..', '..', current.receipt_url)
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath)
+    }
+
+    await query('UPDATE accounts_payable SET receipt_url = ? WHERE id = ?', [receiptUrl, req.params.id])
+    res.json({ receipt_url: receiptUrl, message: 'Comprovante enviado' })
+  } catch (err) {
+    // Remove arquivo se falhou ao atualizar banco
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
+    res.status(500).json({ error: 'Erro ao salvar comprovante' })
+  }
+})
+
+// DELETE /payable/:id/receipt — remover comprovante
+router.delete('/:id/receipt', async (req, res) => {
+  try {
+    const [current] = await query('SELECT receipt_url FROM accounts_payable WHERE id = ?', [req.params.id])
+    if (current?.receipt_url) {
+      const filePath = path.join(__dirname, '..', '..', current.receipt_url)
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+    }
+    await query('UPDATE accounts_payable SET receipt_url = NULL WHERE id = ?', [req.params.id])
+    res.json({ message: 'Comprovante removido' })
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao remover comprovante' })
   }
 })
 

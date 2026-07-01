@@ -1,6 +1,7 @@
 import { ref } from 'vue'
-import { api } from './useApi'
+import { api, getAccessToken } from './useApi'
 
+const BASE_URL = import.meta.env.VITE_API_URL || '/api'
 const items = ref([])
 const summary = ref({ total: 0, pendente: 0, pago: 0, vencido: 0 })
 const loading = ref(false)
@@ -53,5 +54,34 @@ export function usePayable() {
     return res
   }
 
-  return { items, summary, loading, fetchAll, fetchSummary, create, markPaid, update, remove }
+  async function uploadReceipt(id, file) {
+    const formData = new FormData()
+    formData.append('receipt', file)
+
+    const res = await fetch(`${BASE_URL}/payable/${id}/receipt`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getAccessToken()}` },
+      body: formData,
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Erro no upload' }))
+      throw new Error(err.error || 'Erro no upload')
+    }
+
+    const data = await res.json()
+    // Atualiza o item na lista local
+    const item = items.value.find(i => i.id === id)
+    if (item) item.receipt_url = data.receipt_url
+    return data
+  }
+
+  async function deleteReceipt(id) {
+    const res = await api.delete(`/payable/${id}/receipt`)
+    const item = items.value.find(i => i.id === id)
+    if (item) item.receipt_url = null
+    return res
+  }
+
+  return { items, summary, loading, fetchAll, fetchSummary, create, markPaid, update, remove, uploadReceipt, deleteReceipt }
 }

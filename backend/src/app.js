@@ -4,6 +4,7 @@ const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
 const morgan = require('morgan')
+const path = require('path')
 const rateLimit = require('express-rate-limit')
 
 const { testConnection } = require('./config/database')
@@ -18,7 +19,8 @@ const fuelRoutes      = require('./routes/fuel')
 const dashboardRoutes = require('./routes/dashboard')
 const finesRoutes     = require('./routes/fines')
 const tripsRoutes     = require('./routes/trips')
-const usersRoutes     = require('./routes/users')
+const usersRoutes      = require('./routes/users')
+const suppliersRoutes  = require('./routes/suppliers')
 
 const app = express()
 
@@ -47,6 +49,9 @@ app.use('/api', rateLimit({
 app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: true }))
 
+// ── Arquivos estáticos (comprovantes de pagamento)
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
+
 // ── Logs (só em não-produção)
 if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'))
@@ -67,6 +72,7 @@ app.use('/api/dashboard',  dashboardRoutes)
 app.use('/api/fines',      finesRoutes)
 app.use('/api/trips',      tripsRoutes)
 app.use('/api/users',      usersRoutes)
+app.use('/api/suppliers',  suppliersRoutes)
 
 // ── 404
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada' }))

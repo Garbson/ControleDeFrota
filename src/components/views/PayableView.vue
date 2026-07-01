@@ -6,7 +6,7 @@ import KPICard from '../ui/KPICard.vue'
 
 const props = defineProps({ showToast: Function })
 
-const { items, summary, loading, fetchAll, fetchSummary, markPaid, update, remove } = usePayable()
+const { items, summary, loading, fetchAll, fetchSummary, markPaid, update, remove, uploadReceipt, deleteReceipt } = usePayable()
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
 
 const editingPayable = ref(null)
@@ -14,6 +14,55 @@ const viewingPayable = ref(null)
 const editSaving = ref(false)
 const editError = ref('')
 const editForm = ref({ value: '', due_date: '', description: '', category: '', obs: '' })
+
+// ── Upload de comprovante
+const receiptUploading = ref(null) // id da conta com upload em andamento
+const receiptInput = ref(null)
+
+function triggerReceiptUpload(item) {
+  receiptTarget.value = item
+  receiptInput.value?.click()
+}
+
+const receiptTarget = ref(null)
+async function handleReceiptFile(e) {
+  const file = e.target.files?.[0]
+  if (!file || !receiptTarget.value) return
+
+  receiptUploading.value = receiptTarget.value.id
+  try {
+    await uploadReceipt(receiptTarget.value.id, file)
+    props.showToast?.('✅ Comprovante enviado')
+  } catch (err) {
+    props.showToast?.('❌ ' + (err.message || 'Erro ao enviar comprovante'))
+  } finally {
+    receiptUploading.value = null
+    receiptTarget.value = null
+    // limpa o input para permitir reenvio do mesmo arquivo
+    e.target.value = ''
+  }
+}
+
+async function handleDeleteReceipt(item) {
+  if (!confirm('Remover o comprovante de pagamento?')) return
+  try {
+    await deleteReceipt(item.id)
+    props.showToast?.('✅ Comprovante removido')
+  } catch {
+    props.showToast?.('❌ Erro ao remover comprovante')
+  }
+}
+
+function receiptUrl(item) {
+  if (!item?.receipt_url) return null
+  const base = import.meta.env.VITE_API_URL || '/api'
+  // receipt_url já vem como /uploads/receipts/...
+  return item.receipt_url.startsWith('http') ? item.receipt_url : base.replace('/api', '') + item.receipt_url
+}
+
+function isImage(url) {
+  return /\.(jpg|jpeg|png|webp)$/i.test(url || '')
+}
 
 function openEditPayable(c) {
   editingPayable.value = c
@@ -128,6 +177,15 @@ onMounted(() => {
 
 <template>
   <div>
+    <!-- Hidden file input para comprovantes -->
+    <input
+      ref="receiptInput"
+      type="file"
+      accept="image/jpeg,image/png,image/webp,application/pdf"
+      class="hidden"
+      @change="handleReceiptFile"
+    />
+
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center py-20 text-slate-400 text-sm">Carregando...</div>
 
@@ -242,8 +300,19 @@ onMounted(() => {
                   >
                     <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
                   </button>
+                  <!-- Upload comprovante -->
+                  <button
+                    @click="triggerReceiptUpload(c)"
+                    title="Comprovante de pagamento"
+                    class="p-1.5 rounded-md transition-colors inline-flex"
+                    :class="c.receipt_url ? 'text-green-600 bg-green-50 hover:bg-green-100' : 'text-amber-500 bg-amber-50 hover:bg-amber-100'"
+                    :disabled="receiptUploading === c.id"
+                  >
+                    <svg v-if="receiptUploading === c.id" class="animate-spin" width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4V2A10 10 0 002 12h2a8 8 0 018-8z"/></svg>
+                    <svg v-else width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M21.586 10.461l-7.047-7.047a2 2 0 00-2.828 0L4 11.125V20h8.875l7.711-7.711a2 2 0 000-2.828zm-8.875 7.539H6v-6.703L12.703 4l6.703 6.703L12.711 18zM10 18l-1-4 4 1-3 3z"/></svg>
+                  </button>
                   <button v-if="c.status === 'pendente'" @click="handleMarkPaid(c)" class="btn-p !py-1.5 !px-3 text-xs">
-                    Marcar como Pago
+                    Pagar
                   </button>
                   <button
                     @click="handleRemove(c)"
@@ -374,6 +443,33 @@ onMounted(() => {
             <div v-if="viewingPayable.obs" class="col-span-2">
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Observação</div>
               <div class="text-sm text-stone-600 rounded-lg p-3 bg-stone-50 border border-stone-100">{{ viewingPayable.obs }}</div>
+            </div>
+            <!-- Comprovante de pagamento -->
+            <div v-if="viewingPayable.receipt_url" class="col-span-2">
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-2">Comprovante de Pagamento</div>
+              <div v-if="isImage(viewingPayable.receipt_url)" class="rounded-lg overflow-hidden border border-stone-200 bg-stone-50">
+                <img
+                  :src="receiptUrl(viewingPayable)"
+                  alt="Comprovante"
+                  class="w-full max-h-[300px] object-contain cursor-pointer"
+                  @click="window.open(receiptUrl(viewingPayable), '_blank')"
+                />
+              </div>
+              <a
+                v-else
+                :href="receiptUrl(viewingPayable)"
+                target="_blank"
+                class="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors border border-blue-200"
+              >
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                Ver PDF
+              </a>
+              <button
+                @click="handleDeleteReceipt(viewingPayable)"
+                class="mt-2 text-xs text-red-500 hover:text-red-700 underline"
+              >
+                Remover comprovante
+              </button>
             </div>
           </div>
           <div class="px-7 py-4 border-t border-stone-100 flex justify-end">

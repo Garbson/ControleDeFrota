@@ -1,5 +1,5 @@
-import { ref, computed } from 'vue'
-import { api, setTokens, clearTokens } from './useApi'
+import { computed, ref } from 'vue'
+import { api, clearTokens, setTokens } from './useApi'
 
 const user = ref(JSON.parse(localStorage.getItem('cf_user') || 'null'))
 const loading = ref(false)

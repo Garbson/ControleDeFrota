@@ -31,7 +31,7 @@ async function submit() {
       <!-- Logo -->
       <div class="flex flex-col items-center mb-8">
         <div class="logo-wrapper mb-5">
-          <img src="/logo.png" alt="Transportadora Triunfo" class="h-auto w-full object-contain" />
+          <img src="/logo-triunfo.png" alt="Transportadora Triunfo" class="h-auto w-full object-contain" />
         </div>
         <p class="text-[11px] text-stone-400 uppercase tracking-[0.2em] font-semibold">Sistema de Gestão de Frota</p>
       </div>
