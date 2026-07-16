@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../composables/useApi', () => ({
-  getAccessToken: vi.fn(() => 'test-access-token'),
   api: {
     get: vi.fn(),
     post: vi.fn(),
     patch: vi.fn(),
+    upload: vi.fn(),
     delete: vi.fn(),
   },
 }))
@@ -69,19 +69,12 @@ describe('usePayable', () => {
     const { items, uploadInvoice } = usePayable()
     items.value = [{ id: 10, invoice_url: null }]
 
-    fetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ invoice_url: '/uploads/invoices/invoice_10.pdf' }),
-    })
+    api.upload.mockResolvedValueOnce({ invoice_url: '/uploads/invoices/invoice_10.pdf' })
 
     const file = new File(['nota'], 'nota.pdf', { type: 'application/pdf' })
     await uploadInvoice(10, file)
 
-    expect(fetch).toHaveBeenCalledWith('/api/payable/10/invoice', expect.objectContaining({
-      method: 'POST',
-      headers: { Authorization: 'Bearer test-access-token' },
-      body: expect.any(FormData),
-    }))
+    expect(api.upload).toHaveBeenCalledWith('/payable/10/invoice', expect.any(FormData))
     expect(items.value[0].invoice_url).toBe('/uploads/invoices/invoice_10.pdf')
   })
 })

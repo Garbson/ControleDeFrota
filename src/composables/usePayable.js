@@ -1,7 +1,7 @@
 import { ref } from 'vue'
-import { api, getAccessToken } from './useApi'
+import { api } from './useApi'
+import { optimizeUploadImage } from '../utils/imageUpload'
 
-const BASE_URL = import.meta.env.VITE_API_URL || '/api'
 const items = ref([])
 const summary = ref({ total: 0, pendente: 0, pago: 0, vencido: 0 })
 const loading = ref(false)
@@ -55,21 +55,10 @@ export function usePayable() {
   }
 
   async function uploadReceipt(id, file) {
+    const optimizedFile = await optimizeUploadImage(file)
     const formData = new FormData()
-    formData.append('receipt', file)
-
-    const res = await fetch(`${BASE_URL}/payable/${id}/receipt`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${getAccessToken()}` },
-      body: formData,
-    })
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Erro no upload' }))
-      throw new Error(err.error || 'Erro no upload')
-    }
-
-    const data = await res.json()
+    formData.append('receipt', optimizedFile)
+    const data = await api.upload(`/payable/${id}/receipt`, formData)
     // Atualiza o item na lista local
     const item = items.value.find(i => i.id === id)
     if (item) item.receipt_url = data.receipt_url
@@ -84,18 +73,10 @@ export function usePayable() {
   }
 
   async function uploadInvoice(id, file) {
+    const optimizedFile = await optimizeUploadImage(file)
     const formData = new FormData()
-    formData.append('invoice', file)
-    const res = await fetch(`${BASE_URL}/payable/${id}/invoice`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${getAccessToken()}` },
-      body: formData,
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Erro no upload' }))
-      throw new Error(err.error || 'Erro no upload')
-    }
-    const data = await res.json()
+    formData.append('invoice', optimizedFile)
+    const data = await api.upload(`/payable/${id}/invoice`, formData)
     const item = items.value.find(i => i.id === id)
     if (item) item.invoice_url = data.invoice_url
     return data

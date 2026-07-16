@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { useDashboard } from '../../composables/useDashboard'
 import { useStock } from '../../composables/useStock'
+import { useConfirm } from '../../composables/useConfirm'
 import KPICard from '../ui/KPICard.vue'
 
 Chart.register(...registerables)
@@ -11,9 +12,10 @@ const props = defineProps({ showToast: Function })
 
 const { kpis, topDrivers, recentMovements, loading, fetchDashboard } = useDashboard()
 const { removeMovement } = useStock()
+const { confirmAction } = useConfirm()
 
 async function deleteMovement(m) {
-  if (!confirm(`Excluir movimentação de ${m.qty} un de "${m.item_name || 'item'}"?`)) return
+  if (!await confirmAction({ title: 'Excluir movimentação', message: `Excluir a movimentação de ${m.qty} un de "${m.item_name || 'item'}"?`, confirmText: 'Excluir' })) return
   try {
     await removeMovement(m.id)
     await fetchDashboard()

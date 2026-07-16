@@ -5,15 +5,17 @@ import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
 import { api } from '../../composables/useApi'
 import KPICard from '../ui/KPICard.vue'
+import { useConfirm } from '../../composables/useConfirm'
 
 const props = defineProps({ showToast: Function })
 
 const { items, movements, loading, fetchAll, fetchMovements, createMovement, remove, removeMovement } = useStock()
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
 const { vehicles, fetchAll: fetchVehicles } = useVehicles()
+const { confirmAction } = useConfirm()
 
 async function deleteStock(s) {
-  if (!confirm(`Excluir item "${s.description}"?`)) return
+  if (!await confirmAction({ title: 'Excluir item do estoque', message: `Tem certeza que deseja excluir "${s.description}"?`, confirmText: 'Excluir' })) return
   try {
     await remove(s.id)
     props.showToast?.('Item excluído')
@@ -23,7 +25,7 @@ async function deleteStock(s) {
 }
 
 async function deleteMovement(m) {
-  if (!confirm(`Excluir movimentação de ${m.qty} un de "${m.item_name || 'item'}"?`)) return
+  if (!await confirmAction({ title: 'Excluir movimentação', message: `Excluir a movimentação de ${m.qty} un de "${m.item_name || 'item'}"? O saldo do estoque será recalculado.`, confirmText: 'Excluir' })) return
   try {
     await removeMovement(m.id)
     props.showToast?.('Movimentação excluída')
@@ -82,6 +84,13 @@ function openExit(item) {
 
 async function confirmExit() {
   if (!exitForm.value.qty) return
+  const exitConfirmed = await confirmAction({
+    title: 'Confirmar saída de estoque',
+    message: `Registrar a saída de ${exitForm.value.qty} unidade(s) de "${exitModal.value.description}"?`,
+    confirmText: 'Registrar saída',
+    tone: 'primary',
+  })
+  if (!exitConfirmed) return
   try {
     const plate = (exitForm.value.vehicle_plate || '').trim().toUpperCase()
     const matchedVehicle = plate ? vehicles.value.find(v => v.plate.toUpperCase() === plate) : null
@@ -129,6 +138,14 @@ const selectedStockItem = computed(() => items.value.find(i => i.id == entryForm
 
 async function confirmEntry() {
   if (!entryForm.value.qty || Number(entryForm.value.qty) <= 0) return
+  const itemLabel = entryMode.value === 'new' ? entryForm.value.description : selectedStockItem.value?.description
+  const entryConfirmed = await confirmAction({
+    title: 'Confirmar entrada de estoque',
+    message: `Registrar a entrada de ${entryForm.value.qty} unidade(s) de "${itemLabel || 'novo item'}"?`,
+    confirmText: 'Registrar entrada',
+    tone: 'primary',
+  })
+  if (!entryConfirmed) return
   entrySaving.value = true
   try {
     let stockItemId = entryForm.value.stock_item_id

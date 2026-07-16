@@ -2,10 +2,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useUsers } from '../../composables/useUsers'
 import { useAuth } from '../../composables/useAuth'
+import { useConfirm } from '../../composables/useConfirm'
 
 const props = defineProps({ showToast: Function })
 const { user: currentUser } = useAuth()
 const { users, loading, fetchAll, create, update, resetPassword, toggle } = useUsers()
+const { confirmAction } = useConfirm()
 
 // ── Modal criar / editar
 const showModal = ref(false)
@@ -85,7 +87,12 @@ async function savePwd() {
 async function handleToggle(u) {
   if (u.id === currentUser.value?.id) { props.showToast?.('❌ Não é possível desativar sua própria conta'); return }
   const action = u.active ? 'desativar' : 'ativar'
-  if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} o acesso de ${u.name}?`)) return
+  if (!await confirmAction({
+    title: `${action.charAt(0).toUpperCase() + action.slice(1)} acesso`,
+    message: `Tem certeza que deseja ${action} o acesso de ${u.name}?`,
+    confirmText: action === 'desativar' ? 'Desativar' : 'Ativar',
+    tone: action === 'desativar' ? 'danger' : 'primary',
+  })) return
   await toggle(u.id)
   props.showToast?.(`✅ Acesso ${u.active ? 'desativado' : 'ativado'}`)
 }

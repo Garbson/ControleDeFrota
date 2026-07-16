@@ -4,6 +4,7 @@ import { usePayable } from '../../composables/usePayable'
 import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
 import { useSuppliers } from '../../composables/useSuppliers'
+import { useConfirm } from '../../composables/useConfirm'
 import KPICard from '../ui/KPICard.vue'
 
 const props = defineProps({ showToast: Function })
@@ -12,6 +13,7 @@ const { items, summary, loading, fetchAll, fetchSummary, markPaid, update, remov
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
 const { vehicles, fetchAll: fetchVehicles } = useVehicles()
 const { suppliers, fetchAll: fetchSuppliers } = useSuppliers()
+const { confirmAction } = useConfirm()
 
 // ── Edit: busca de placa
 const editPlateInput = ref('')
@@ -93,7 +95,7 @@ async function handleReceiptFile(e) {
 }
 
 async function handleDeleteReceipt(item) {
-  if (!confirm('Remover o comprovante de pagamento?')) return
+  if (!await confirmAction({ title: 'Remover comprovante', message: 'Tem certeza que deseja remover o comprovante de pagamento?', confirmText: 'Remover' })) return
   try {
     await deleteReceipt(item.id)
     props.showToast?.('✅ Comprovante removido')
@@ -140,7 +142,7 @@ async function handleInvoiceFile(e) {
 }
 
 async function handleDeleteInvoice(item) {
-  if (!confirm('Remover a nota fiscal?')) return
+  if (!await confirmAction({ title: 'Remover nota fiscal', message: 'Tem certeza que deseja remover a nota fiscal anexada?', confirmText: 'Remover' })) return
   try {
     await deleteInvoice(item.id)
     props.showToast?.('✅ Nota fiscal removida')
@@ -252,13 +254,19 @@ const nextDue = computed(() => {
 })
 
 async function handleMarkPaid(item) {
+  if (!await confirmAction({
+    title: 'Confirmar pagamento',
+    message: `Marcar a conta "${item.description || item.document || 'R$ ' + fmt(item.value)}" como paga hoje?`,
+    confirmText: 'Confirmar pagamento',
+    tone: 'primary',
+  })) return
   const today = new Date().toISOString().split('T')[0]
   await markPaid(item.id, today)
   props.showToast?.(`✅ Conta paga: ${(item.description || item.document || '').substring(0, 40)}`)
 }
 
 async function handleRemove(item) {
-  if (!confirm(`Excluir a conta "${item.description || item.document || 'R$ ' + fmt(item.value)}"? Esta ação não pode ser desfeita.`)) return
+  if (!await confirmAction({ title: 'Excluir conta a pagar', message: `Excluir a conta "${item.description || item.document || 'R$ ' + fmt(item.value)}"? Esta ação não pode ser desfeita.`, confirmText: 'Excluir' })) return
   try {
     await remove(item.id)
     props.showToast?.('✅ Conta removida')

@@ -79,6 +79,12 @@ app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada' }))
 
 // ── Error handler global
 app.use((err, req, res, next) => {
+  if (err?.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error: 'Arquivo muito grande. O limite é 10 MB.' })
+  }
+  if (err?.name === 'MulterError') {
+    return res.status(400).json({ error: err.message || 'Erro ao enviar arquivo' })
+  }
   console.error(err.stack)
   res.status(500).json({ error: 'Erro interno do servidor' })
 })

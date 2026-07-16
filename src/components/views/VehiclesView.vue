@@ -2,10 +2,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useVehicles } from '../../composables/useVehicles'
 import { api } from '../../composables/useApi'
+import { useConfirm } from '../../composables/useConfirm'
 
 const props = defineProps({ showToast: Function })
 
 const { vehicles, loading, fetchAll, remove } = useVehicles()
+const { confirmAction } = useConfirm()
 
 const vFilter = ref('all')
 const vSort = ref('plate')
@@ -19,7 +21,7 @@ const editingVehicle = ref(null)
 const viewingVehicle = ref(null)
 
 async function deleteVehicle(v) {
-  if (!confirm(`Excluir veículo ${v.plate}?`)) return
+  if (!await confirmAction({ title: 'Excluir veículo', message: `Tem certeza que deseja excluir o veículo ${v.plate}?`, confirmText: 'Excluir' })) return
   try {
     await remove(v.id)
     props.showToast?.('Veículo excluído')

@@ -3,10 +3,12 @@ import { ref, computed, onMounted } from 'vue'
 import { useFines } from '../../composables/useFines'
 import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
+import { useConfirm } from '../../composables/useConfirm'
 
 const { items, summary, loading, descriptions, fetchAll, fetchSummary, fetchDescriptions, create, update, markPaid, markAppeal, remove } = useFines()
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
 const { vehicles, fetchAll: fetchVehicles } = useVehicles()
+const { confirmAction } = useConfirm()
 
 function fmtDate(raw) {
   if (!raw) return '—'
@@ -120,16 +122,17 @@ async function submit() {
 }
 
 async function pay(fine) {
-  if (!confirm(`Marcar multa R$ ${Number(fine.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} como PAGA?`)) return
+  if (!await confirmAction({ title: 'Confirmar pagamento', message: `Marcar a multa de R$ ${Number(fine.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} como paga?`, confirmText: 'Confirmar pagamento', tone: 'primary' })) return
   await markPaid(fine.id, new Date().toISOString().split('T')[0])
 }
 
 async function appeal(fine) {
+  if (!await confirmAction({ title: 'Enviar para recurso', message: 'Tem certeza que deseja marcar esta multa como em recurso?', confirmText: 'Confirmar recurso', tone: 'primary' })) return
   await markAppeal(fine.id)
 }
 
 async function del(fine) {
-  if (!confirm('Remover esta multa?')) return
+  if (!await confirmAction({ title: 'Remover multa', message: 'Tem certeza que deseja remover esta multa?', confirmText: 'Remover' })) return
   await remove(fine.id)
 }
 

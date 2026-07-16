@@ -26,8 +26,10 @@ function onInvoiceSelected(event) {
   event.target.value = ''
   if (!file) return
 
-  if (file.size > 5 * 1024 * 1024) {
-    props.showToast?.('❌ A nota fiscal deve ter no máximo 5 MB')
+  const isImageFile = /^image\/(jpeg|png|webp)$/i.test(file.type)
+  const maxOriginalSize = isImageFile ? 30 * 1024 * 1024 : 10 * 1024 * 1024
+  if (file.size > maxOriginalSize) {
+    props.showToast?.(`❌ ${isImageFile ? 'A imagem deve ter no máximo 30 MB' : 'O PDF deve ter no máximo 10 MB'}`)
     return
   }
 
@@ -395,7 +397,7 @@ onMounted(() => {
           </div>
 
           <div class="col-span-2">
-            <label class="flabel">Nota fiscal <span class="font-normal normal-case text-slate-400">(opcional · JPG, PNG, WEBP ou PDF · até 5 MB)</span></label>
+            <label class="flabel">Nota fiscal <span class="font-normal normal-case text-slate-400">(imagens são convertidas para WEBP · PDF até 10 MB)</span></label>
             <input
               ref="invoiceInput"
               type="file"

@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useTrips } from '../../composables/useTrips'
+import { useConfirm } from '../../composables/useConfirm'
 import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
 import KPICard from '../ui/KPICard.vue'
@@ -10,6 +11,7 @@ const props = defineProps({ showToast: Function })
 const { items, summary, loading, fetchAll, fetchOne, fetchSummary, create, update, remove, addLeg, updateLeg, removeLeg } = useTrips()
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
 const { vehicles, fetchAll: fetchVehicles } = useVehicles()
+const { confirmAction } = useConfirm()
 
 const filterDriver = ref('')
 const tripsSort = ref('data-desc')
@@ -128,7 +130,7 @@ async function saveLeg() {
 }
 
 async function deleteLeg(leg) {
-  if (!confirm(`Remover trecho "${leg.origin} → ${leg.destination}"?`)) return
+  if (!await confirmAction({ title: 'Remover trecho', message: `Remover o trecho "${leg.origin} → ${leg.destination}"? O frete vinculado também poderá ser removido.`, confirmText: 'Remover' })) return
   try {
     await removeLeg(detailTrip.value.id, leg.id)
     detailTrip.value = await fetchOne(detailTrip.value.id)
@@ -283,7 +285,7 @@ async function openDetail(trip) {
 }
 
 async function deleteTrip(trip) {
-  if (!confirm(`Excluir viagem ${trip.origin} → ${trip.destination}?`)) return
+  if (!await confirmAction({ title: 'Excluir viagem', message: `Excluir a viagem ${trip.origin} → ${trip.destination}? Esta ação não pode ser desfeita.`, confirmText: 'Excluir' })) return
   try {
     await remove(trip.id)
     props.showToast?.('Viagem excluída')

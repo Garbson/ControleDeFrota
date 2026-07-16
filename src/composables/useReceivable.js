@@ -1,7 +1,7 @@
 import { ref } from 'vue'
-import { api, getAccessToken } from './useApi'
+import { api } from './useApi'
+import { optimizeUploadImage } from '../utils/imageUpload'
 
-const BASE_URL = import.meta.env.VITE_API_URL || '/api'
 const items = ref([])
 const summary = ref({ total: 0, pendente: 0, recebido: 0 })
 const loading = ref(false)
@@ -53,21 +53,10 @@ export function useReceivable() {
   }
 
   async function uploadReceipt(id, file) {
+    const optimizedFile = await optimizeUploadImage(file)
     const formData = new FormData()
-    formData.append('receipt', file)
-
-    const res = await fetch(`${BASE_URL}/receivable/${id}/receipt`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${getAccessToken()}` },
-      body: formData,
-    })
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Erro no upload' }))
-      throw new Error(err.error || 'Erro no upload')
-    }
-
-    const data = await res.json()
+    formData.append('receipt', optimizedFile)
+    const data = await api.upload(`/receivable/${id}/receipt`, formData)
     const item = items.value.find(i => i.id === id)
     if (item) item.receipt_url = data.receipt_url
     return data

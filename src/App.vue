@@ -3,6 +3,7 @@ import { onMounted, provide, ref } from "vue";
 import AppSidebar from "./components/layout/AppSidebar.vue";
 import AppTopbar from "./components/layout/AppTopbar.vue";
 import Toast from "./components/ui/Toast.vue";
+import ConfirmDialog from "./components/ui/ConfirmDialog.vue";
 import AnalyticsView from "./components/views/AnalyticsView.vue";
 import DashboardView from "./components/views/DashboardView.vue";
 import DriversView from "./components/views/DriversView.vue";
@@ -156,5 +157,6 @@ onMounted(async () => {
       </div>
     </main>
     <Toast />
+    <ConfirmDialog />
   </div>
 </template>

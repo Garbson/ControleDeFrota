@@ -3,11 +3,13 @@ import { ref, computed, onMounted } from 'vue'
 import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
 import { api } from '../../composables/useApi'
+import { useConfirm } from '../../composables/useConfirm'
 
 const props = defineProps({ showToast: Function })
 
 const { drivers, loading, fetchAll, fetchOne, remove } = useDrivers()
 const { vehicles, fetchAll: fetchVehicles } = useVehicles()
+const { confirmAction } = useConfirm()
 
 const dSort = ref('tires-desc')
 const dFilter = ref('all')
@@ -27,7 +29,7 @@ function fmtDate(raw) {
 }
 
 async function deleteDriver(d) {
-  if (!confirm(`Excluir motorista "${d.name}"?`)) return
+  if (!await confirmAction({ title: 'Excluir motorista', message: `Tem certeza que deseja excluir o motorista "${d.name}"?`, confirmText: 'Excluir' })) return
   try {
     await remove(d.id)
     props.showToast?.('Motorista excluído')

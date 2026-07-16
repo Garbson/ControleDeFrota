@@ -4,12 +4,14 @@ import { useFuel } from '../../composables/useFuel'
 import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
 import KPICard from '../ui/KPICard.vue'
+import { useConfirm } from '../../composables/useConfirm'
 
 const props = defineProps({ showToast: Function })
 
 const { records, loading, fetchAll, create, update, remove } = useFuel()
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
 const { vehicles, fetchAll: fetchVehicles } = useVehicles()
+const { confirmAction } = useConfirm()
 
 function fmtDate(raw) {
   if (!raw) return '—'
@@ -59,7 +61,7 @@ function openEditFuel(f) {
 
 async function deleteFuel(f) {
   const driver = f.driver_name || 'registro'
-  if (!confirm(`Excluir abastecimento de ${driver} em ${f.fuel_date?.split('T')[0] || ''}?`)) return
+  if (!await confirmAction({ title: 'Excluir abastecimento', message: `Excluir o abastecimento de ${driver} em ${f.fuel_date?.split('T')[0] || ''}?`, confirmText: 'Excluir' })) return
   try {
     await remove(f.id)
     props.showToast?.('Abastecimento excluído')

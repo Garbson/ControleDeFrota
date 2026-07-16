@@ -2,10 +2,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useReceivable } from '../../composables/useReceivable'
 import KPICard from '../ui/KPICard.vue'
+import { useConfirm } from '../../composables/useConfirm'
 
 const props = defineProps({ showToast: Function })
 
 const { items, loading, fetchAll, fetchSummary, markReceived, update, remove, uploadReceipt, deleteReceipt } = useReceivable()
+const { confirmAction } = useConfirm()
 
 const editingReceivable = ref(null)
 const viewingReceivable = ref(null)
@@ -14,7 +16,7 @@ const editError = ref('')
 const editForm = ref({ value: '', due_date: '', client: '', description: '', obs: '' })
 
 async function deleteReceivable(c) {
-  if (!confirm(`Excluir conta a receber de "${c.client || 'sem cliente'}" — R$ ${Number(c.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`)) return
+  if (!await confirmAction({ title: 'Excluir conta a receber', message: `Excluir a conta de "${c.client || 'sem cliente'}" no valor de R$ ${Number(c.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`, confirmText: 'Excluir' })) return
   try {
     await remove(c.id)
     props.showToast?.('Conta a receber excluída')
@@ -89,7 +91,7 @@ async function handleReceiptFile(e) {
 }
 
 async function handleDeleteReceipt(item) {
-  if (!confirm('Remover o comprovante de recebimento?')) return
+  if (!await confirmAction({ title: 'Remover comprovante', message: 'Tem certeza que deseja remover o comprovante de recebimento?', confirmText: 'Remover' })) return
   try {
     await deleteReceipt(item.id)
     props.showToast?.('✅ Comprovante removido')
@@ -142,6 +144,12 @@ const crPendente = computed(() => pendentes.value.reduce((s, c) => s + Number(c.
 const crRecebido = computed(() => recebidos.value.reduce((s, c) => s + Number(c.value || 0), 0))
 
 async function handleMarkReceived(item) {
+  if (!await confirmAction({
+    title: 'Confirmar recebimento',
+    message: `Marcar o valor de ${item.client || item.description || 'conta'} como recebido hoje?`,
+    confirmText: 'Confirmar recebimento',
+    tone: 'primary',
+  })) return
   const today = new Date().toISOString().split('T')[0]
   await markReceived(item.id, today)
   props.showToast?.(`✅ Frete recebido: ${item.client || item.description || ''}`)
