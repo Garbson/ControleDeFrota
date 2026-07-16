@@ -5,13 +5,24 @@ import KPICard from '../ui/KPICard.vue'
 
 const props = defineProps({ showToast: Function })
 
-const { items, loading, fetchAll, fetchSummary, markReceived, update } = useReceivable()
+const { items, loading, fetchAll, fetchSummary, markReceived, update, remove, uploadReceipt, deleteReceipt } = useReceivable()
 
 const editingReceivable = ref(null)
 const viewingReceivable = ref(null)
 const editSaving = ref(false)
 const editError = ref('')
 const editForm = ref({ value: '', due_date: '', client: '', description: '', obs: '' })
+
+async function deleteReceivable(c) {
+  if (!confirm(`Excluir conta a receber de "${c.client || 'sem cliente'}" — R$ ${Number(c.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`)) return
+  try {
+    await remove(c.id)
+    props.showToast?.('Conta a receber excluída')
+    await fetchSummary()
+  } catch {
+    props.showToast?.('❌ Erro ao excluir conta')
+  }
+}
 
 function openEditReceivable(c) {
   editingReceivable.value = c
@@ -48,6 +59,53 @@ async function saveEditReceivable() {
   } finally {
     editSaving.value = false
   }
+}
+
+// ── Upload de comprovante
+const receiptUploading = ref(null)
+const receiptInput = ref(null)
+
+function triggerReceiptUpload(item) {
+  receiptTarget.value = item
+  receiptInput.value?.click()
+}
+
+const receiptTarget = ref(null)
+async function handleReceiptFile(e) {
+  const file = e.target.files?.[0]
+  if (!file || !receiptTarget.value) return
+
+  receiptUploading.value = receiptTarget.value.id
+  try {
+    await uploadReceipt(receiptTarget.value.id, file)
+    props.showToast?.('✅ Comprovante enviado')
+  } catch (err) {
+    props.showToast?.('❌ ' + (err.message || 'Erro ao enviar comprovante'))
+  } finally {
+    receiptUploading.value = null
+    receiptTarget.value = null
+    e.target.value = ''
+  }
+}
+
+async function handleDeleteReceipt(item) {
+  if (!confirm('Remover o comprovante de recebimento?')) return
+  try {
+    await deleteReceipt(item.id)
+    props.showToast?.('✅ Comprovante removido')
+  } catch {
+    props.showToast?.('❌ Erro ao remover comprovante')
+  }
+}
+
+function receiptUrl(item) {
+  if (!item?.receipt_url) return null
+  const base = import.meta.env.VITE_API_URL || '/api'
+  return item.receipt_url.startsWith('http') ? item.receipt_url : base.replace('/api', '') + item.receipt_url
+}
+
+function isImage(url) {
+  return /\.(jpg|jpeg|png|webp)$/i.test(url || '')
 }
 
 const crFilter = ref('all')
@@ -97,6 +155,15 @@ onMounted(() => {
 
 <template>
   <div>
+    <!-- Hidden file input para comprovantes -->
+    <input
+      ref="receiptInput"
+      type="file"
+      accept="image/jpeg,image/png,image/webp,application/pdf"
+      class="hidden"
+      @change="handleReceiptFile"
+    />
+
     <div v-if="loading" class="flex items-center justify-center py-20 text-slate-400 text-sm">Carregando...</div>
 
     <template v-else>
@@ -169,6 +236,23 @@ onMounted(() => {
                     class="text-blue-600 bg-blue-50 hover:bg-blue-100 p-1.5 rounded-md transition-colors inline-flex"
                   >
                     <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                  </button>
+                  <button
+                    @click="triggerReceiptUpload(c)"
+                    title="Comprovante de recebimento"
+                    class="p-1.5 rounded-md transition-colors inline-flex"
+                    :class="c.receipt_url ? 'text-green-600 bg-green-50 hover:bg-green-100' : 'text-amber-500 bg-amber-50 hover:bg-amber-100'"
+                    :disabled="receiptUploading === c.id"
+                  >
+                    <svg v-if="receiptUploading === c.id" class="animate-spin" width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4V2A10 10 0 002 12h2a8 8 0 018-8z"/></svg>
+                    <svg v-else width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M21.586 10.461l-7.047-7.047a2 2 0 00-2.828 0L4 11.125V20h8.875l7.711-7.711a2 2 0 000-2.828zm-8.875 7.539H6v-6.703L12.703 4l6.703 6.703L12.711 18zM10 18l-1-4 4 1-3 3z"/></svg>
+                  </button>
+                  <button
+                    @click="deleteReceivable(c)"
+                    title="Excluir"
+                    class="text-red-600 bg-red-50 hover:bg-red-100 p-1.5 rounded-md transition-colors inline-flex"
+                  >
+                    <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                   </button>
                   <button v-if="c.status === 'pendente'" @click="handleMarkReceived(c)" class="btn-p !py-1.5 !px-3 text-xs">
                     Marcar como Recebido
@@ -283,6 +367,43 @@ onMounted(() => {
             <div v-if="viewingReceivable.obs" class="col-span-2">
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Observação</div>
               <div class="text-sm text-stone-600 rounded-lg p-3 bg-stone-50 border border-stone-100">{{ viewingReceivable.obs }}</div>
+            </div>
+            <!-- Comprovante de recebimento -->
+            <div v-if="viewingReceivable.receipt_url" class="col-span-2">
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-2">Comprovante de Recebimento</div>
+              <div v-if="isImage(viewingReceivable.receipt_url)" class="rounded-lg overflow-hidden border border-stone-200 bg-stone-50">
+                <img
+                  :src="receiptUrl(viewingReceivable)"
+                  alt="Comprovante"
+                  class="w-full max-h-[300px] object-contain cursor-pointer"
+                  @click="window.open(receiptUrl(viewingReceivable), '_blank')"
+                />
+              </div>
+              <a
+                v-else
+                :href="receiptUrl(viewingReceivable)"
+                target="_blank"
+                class="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors border border-blue-200"
+              >
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                Ver PDF
+              </a>
+              <div class="mt-2 flex items-center gap-3">
+                <a
+                  :href="receiptUrl(viewingReceivable)"
+                  :download="'comprovante_' + viewingReceivable.id"
+                  class="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                >
+                  <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                  Baixar
+                </a>
+                <button
+                  @click="handleDeleteReceipt(viewingReceivable)"
+                  class="text-xs text-red-500 hover:text-red-700 underline"
+                >
+                  Remover comprovante
+                </button>
+              </div>
             </div>
           </div>
           <div class="px-7 py-4 border-t border-stone-100 flex justify-end">

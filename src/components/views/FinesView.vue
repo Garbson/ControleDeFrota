@@ -8,6 +8,11 @@ const { items, summary, loading, descriptions, fetchAll, fetchSummary, fetchDesc
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
 const { vehicles, fetchAll: fetchVehicles } = useVehicles()
 
+function fmtDate(raw) {
+  if (!raw) return '—'
+  return new Date(raw).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+}
+
 const statusFilter = ref('all')
 const descriptionFilter = ref('')
 const showModal = ref(false)
@@ -238,8 +243,8 @@ onMounted(async () => {
 
           <!-- Data -->
           <div class="text-xs text-stone-600">
-            <div>{{ f.fine_date?.split('T')[0] }}</div>
-            <div v-if="f.due_date" class="text-[10px] text-slate-400">Vence: {{ f.due_date?.split('T')[0] }}</div>
+            <div>{{ fmtDate(f.fine_date) }}</div>
+            <div v-if="f.due_date" class="text-[10px] text-slate-400">Vence: {{ fmtDate(f.due_date) }}</div>
           </div>
 
           <!-- Status -->
@@ -460,11 +465,11 @@ onMounted(async () => {
             </div>
             <div>
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Data da Infração</div>
-              <div class="text-sm font-semibold text-slate-800">{{ viewingFine.fine_date ? new Date(viewingFine.fine_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—' }}</div>
+              <div class="text-sm font-semibold text-slate-800">{{ fmtDate(viewingFine.fine_date) }}</div>
             </div>
             <div>
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Vencimento</div>
-              <div class="text-sm font-semibold text-slate-800">{{ viewingFine.due_date ? new Date(viewingFine.due_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—' }}</div>
+              <div class="text-sm font-semibold text-slate-800">{{ fmtDate(viewingFine.due_date) }}</div>
             </div>
             <div v-if="viewingFine.obs" class="col-span-2">
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Observação</div>

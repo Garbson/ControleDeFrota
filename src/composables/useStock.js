@@ -44,5 +44,12 @@ export function useStock() {
     return res
   }
 
-  return { items, movements, loading, fetchAll, fetchMovements, create, update, remove, createMovement }
+  async function removeMovement(id) {
+    const res = await api.delete(`/stock/movements/${id}`)
+    await fetchAll()
+    await fetchMovements()
+    return res
+  }
+
+  return { items, movements, loading, fetchAll, fetchMovements, create, update, remove, createMovement, removeMovement }
 }

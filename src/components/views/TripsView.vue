@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useTrips } from '../../composables/useTrips'
 import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
@@ -23,16 +23,13 @@ const emptyForm = () => ({
   driver_id: '',
   truck_id: '',
   trailer_id: '',
+  trailer_id_2: '',
   origin: '',
   destination: '',
-  cargo: '',
-  client: '',
   initial_km: '',
   final_km: '',
   start_date: new Date().toISOString().split('T')[0],
   end_date: '',
-  freight_value: '',
-  freight_status: 'a_receber',
   obs: '',
 })
 
@@ -50,7 +47,7 @@ function addFormLeg() {
   const lastDest = formLegs.value.length
     ? formLegs.value[formLegs.value.length - 1].destination
     : form.value.origin
-  formLegs.value.push({ _key: Date.now() + Math.random(), id: null, origin: lastDest, destination: '', client: '', freight_value: '', freight_status: 'a_receber' })
+  formLegs.value.push({ _key: Date.now() + Math.random(), id: null, origin: lastDest, destination: '', cargo: '', client: '', freight_value: '', freight_status: 'a_receber' })
 }
 
 function removeFormLeg(index) {
@@ -172,7 +169,7 @@ function openNew() {
   editingId.value = null
   formError.value = ''
   form.value = emptyForm()
-  formLegs.value = []
+  formLegs.value = [{ _key: Date.now(), id: null, origin: '', destination: '', cargo: '', client: '', freight_value: '', freight_status: 'a_receber' }]
   deletedLegIds.value = []
   showForm.value = true
 }
@@ -184,16 +181,13 @@ async function openEdit(trip) {
     driver_id:      trip.driver_id,
     truck_id:       trip.truck_id || '',
     trailer_id:     trip.trailer_id || '',
+    trailer_id_2:   trip.trailer_id_2 || '',
     origin:         trip.origin,
     destination:    trip.destination,
-    cargo:          trip.cargo || '',
-    client:         trip.client || '',
     initial_km:     trip.initial_km,
     final_km:       trip.final_km || '',
     start_date:     trip.start_date?.split('T')[0],
     end_date:       trip.end_date?.split('T')[0] || '',
-    freight_value:  trip.freight_value > 0 ? trip.freight_value : '',
-    freight_status: trip.freight_status !== 'sem_frete' ? trip.freight_status : 'a_receber',
     obs:            trip.obs || '',
   }
   formLegs.value = []
@@ -206,6 +200,7 @@ async function openEdit(trip) {
       id: l.id,
       origin: l.origin,
       destination: l.destination,
+      cargo: l.cargo || '',
       client: l.client || '',
       freight_value: l.freight_value > 0 ? l.freight_value : '',
       freight_status: l.freight_status || 'a_receber',
@@ -221,17 +216,18 @@ async function submitForm() {
     const data = {
       driver_id:      Number(form.value.driver_id),
       truck_id:       form.value.truck_id   ? Number(form.value.truck_id)   : null,
-      trailer_id:     form.value.trailer_id ? Number(form.value.trailer_id) : null,
+      trailer_id:     form.value.trailer_id   ? Number(form.value.trailer_id)   : null,
+      trailer_id_2:   form.value.trailer_id_2 ? Number(form.value.trailer_id_2) : null,
       origin:         form.value.origin,
       destination:    form.value.destination,
-      cargo:          form.value.cargo || null,
-      client:         form.value.client || null,
+      cargo:          null,
+      client:         null,
       initial_km:     Number(form.value.initial_km),
       final_km:       form.value.final_km ? Number(form.value.final_km) : null,
       start_date:     form.value.start_date,
       end_date:       form.value.end_date || null,
-      freight_value:  form.value.freight_value ? Number(form.value.freight_value) : 0,
-      freight_status: form.value.freight_value ? form.value.freight_status : 'sem_frete',
+      freight_value:  0,
+      freight_status: 'sem_frete',
       obs:            form.value.obs || null,
     }
     let tripId
@@ -253,6 +249,7 @@ async function submitForm() {
       const legData = {
         origin: leg.origin,
         destination: leg.destination,
+        cargo: leg.cargo || null,
         client: leg.client || null,
         freight_value: fv,
         freight_status: fv > 0 ? leg.freight_status : 'sem_frete',
@@ -302,6 +299,35 @@ function fmtDate(raw) {
   if (!raw) return '—'
   return new Date(raw).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
 }
+
+const today = new Date().toLocaleDateString('pt-BR')
+
+const regularFuelRecords = computed(() =>
+  (detailTrip.value?.fuel_records || []).filter(f => f.fuel_type !== 'Diesel Termo King')
+)
+const thermoKingRecords = computed(() =>
+  (detailTrip.value?.fuel_records || []).filter(f => f.fuel_type === 'Diesel Termo King')
+)
+
+// ── Impressão de viagem ──────────────────────────────────
+const printingTrip = ref(null)
+
+function printTrip() {
+  printingTrip.value = detailTrip.value
+  document.body.classList.add('trip-printing')
+
+  const cleanup = () => {
+    document.body.classList.remove('trip-printing')
+    printingTrip.value = null
+    window.removeEventListener('afterprint', cleanup)
+  }
+  window.addEventListener('afterprint', cleanup)
+  setTimeout(() => window.print(), 60)
+}
+
+onUnmounted(() => {
+  document.body.classList.remove('trip-printing')
+})
 
 onMounted(() => {
   fetchAll()
@@ -354,7 +380,6 @@ onMounted(() => {
             <th class="th">Motorista</th>
             <th class="th">Cavalo</th>
             <th class="th">Origem → Destino</th>
-            <th class="th">Carga</th>
             <th class="th text-right">KM</th>
             <th class="th text-right">Km/L</th>
             <th class="th text-right">Frete</th>
@@ -382,19 +407,15 @@ onMounted(() => {
               <div class="text-stone-800 font-medium">{{ t.origin }}</div>
               <div class="text-slate-400 text-[10px]">→ {{ t.destination }}</div>
             </td>
-            <td class="td text-xs text-stone-600">{{ t.cargo || '—' }}</td>
             <td class="td text-right font-bold text-stone-800">{{ t.distance > 0 ? fmtInt(t.distance) : '—' }}</td>
             <td class="td text-right font-semibold text-xs" :class="t.avg_consumption ? 'text-green-700' : 'text-slate-400'">
               {{ t.avg_consumption ? t.avg_consumption : '—' }}
             </td>
             <td class="td text-right">
-              <div v-if="t.freight_value > 0">
-                <div class="font-extrabold text-stone-800">R$ {{ fmt(t.freight_value) }}</div>
-                <span
-                  class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                  :class="t.freight_status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'"
-                >
-                  {{ t.freight_status === 'pago' ? 'Pago' : 'A receber' }}
+              <div v-if="t.revenue > 0">
+                <div class="font-extrabold text-stone-800">R$ {{ fmt(t.revenue) }}</div>
+                <span v-if="t.legs_count > 0" class="text-[9px] font-semibold px-1 py-0.5 rounded bg-blue-50 text-blue-600">
+                  {{ t.legs_count }} trecho{{ t.legs_count > 1 ? 's' : '' }}
                 </span>
               </div>
               <span v-else class="text-slate-400 text-xs">—</span>
@@ -455,8 +476,15 @@ onMounted(() => {
                   </select>
                 </div>
                 <div>
-                  <label class="flabel">Carreta</label>
+                  <label class="flabel">Carreta 1</label>
                   <select v-model="form.trailer_id" class="finput">
+                    <option value="">Nenhuma</option>
+                    <option v-for="v in trailers" :key="v.id" :value="v.id">{{ v.plate }} — {{ v.brand }} {{ v.model }}</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="flabel">Carreta 2</label>
+                  <select v-model="form.trailer_id_2" class="finput">
                     <option value="">Nenhuma</option>
                     <option v-for="v in trailers" :key="v.id" :value="v.id">{{ v.plate }} — {{ v.brand }} {{ v.model }}</option>
                   </select>
@@ -478,58 +506,8 @@ onMounted(() => {
                   <input v-model="form.final_km" type="number" placeholder="0" min="0" step="0.1" class="finput" />
                 </div>
                 <div>
-                  <label class="flabel">Carga</label>
-                  <input v-model="form.cargo" placeholder="Ex: Cimento, Madeira..." class="finput" />
-                </div>
-                <div>
                   <label class="flabel">Data Fim</label>
                   <input v-model="form.end_date" type="date" class="finput" />
-                </div>
-              </div>
-            </div>
-
-            <!-- Seção: Frete -->
-            <div>
-              <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span class="h-px flex-1 bg-stone-100/70" />
-                Frete / Receita
-                <span class="h-px flex-1 bg-stone-100/70" />
-              </div>
-              <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="flabel">Cliente / Tomador</label>
-                  <input v-model="form.client" placeholder="Nome do cliente" class="finput" />
-                </div>
-                <div>
-                  <label class="flabel">Valor do Frete (R$)</label>
-                  <input v-model="form.freight_value" type="number" placeholder="0,00" min="0" step="0.01" class="finput" />
-                </div>
-              </div>
-
-              <!-- Status do frete — só aparece quando há valor -->
-              <div v-if="Number(form.freight_value) > 0" class="mt-3">
-                <label class="flabel mb-2">Status do Frete</label>
-                <div class="flex gap-2">
-                  <button
-                    type="button"
-                    class="flex-1 py-2 rounded-lg text-xs font-bold border-2 transition-all"
-                    :class="form.freight_status === 'a_receber'
-                      ? 'border-amber-400 bg-amber-50 text-amber-700'
-                      : 'border-stone-200 bg-white text-slate-500 hover:border-slate-300'"
-                    @click="form.freight_status = 'a_receber'"
-                  >
-                    Lançar em Contas a Receber
-                  </button>
-                  <button
-                    type="button"
-                    class="flex-1 py-2 rounded-lg text-xs font-bold border-2 transition-all"
-                    :class="form.freight_status === 'pago'
-                      ? 'border-green-400 bg-green-50 text-green-700'
-                      : 'border-stone-200 bg-white text-slate-500 hover:border-slate-300'"
-                    @click="form.freight_status = 'pago'"
-                  >
-                    Já Recebido
-                  </button>
                 </div>
               </div>
             </div>
@@ -541,9 +519,6 @@ onMounted(() => {
                 Trechos
                 <span class="h-px flex-1 bg-stone-100/70" />
               </div>
-              <p v-if="formLegs.length" class="text-[10px] text-blue-600 bg-blue-50 rounded px-2 py-1 mb-3">
-                O frete total da viagem será calculado pela soma dos fretes dos trechos.
-              </p>
               <div v-if="formLegs.length" class="space-y-2 mb-3">
                 <div v-for="(leg, i) in formLegs" :key="leg._key" class="bg-stone-50/50 border border-stone-200 rounded-lg p-3">
                   <div class="flex items-center justify-between mb-2">
@@ -560,6 +535,10 @@ onMounted(() => {
                     <div>
                       <label class="flabel">Para *</label>
                       <input v-model="leg.destination" placeholder="Ex: São Paulo/SP" class="finput" />
+                    </div>
+                    <div>
+                      <label class="flabel">Carga</label>
+                      <input v-model="leg.cargo" placeholder="Ex: Cimento, Madeira..." class="finput" />
                     </div>
                     <div>
                       <label class="flabel">Cliente</label>
@@ -612,7 +591,7 @@ onMounted(() => {
     <!-- Modal Detalhe -->
     <Teleport to="body">
       <div v-if="showDetail" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" @click.self="showDetail = false">
-        <div class="glass-strong rounded-xl w-[720px] max-h-[92vh] overflow-y-auto">
+        <div class="glass-strong rounded-xl w-[1000px] max-h-[92vh] overflow-y-auto">
           <div v-if="detailLoading" class="flex items-center justify-center py-16 text-slate-400 text-sm">Carregando detalhes...</div>
 
           <template v-else-if="detailTrip">
@@ -623,15 +602,22 @@ onMounted(() => {
                   <h3 class="m-0 text-[15px] font-bold text-white">{{ detailTrip.origin }} → {{ detailTrip.destination }}</h3>
                   <p class="mt-1 mb-0 text-xs text-slate-400">
                     {{ detailTrip.driver_name }}
-                    <template v-if="detailTrip.cargo"> · {{ detailTrip.cargo }}</template>
                     · {{ fmtDate(detailTrip.start_date) }}
                     <template v-if="detailTrip.end_date"> → {{ fmtDate(detailTrip.end_date) }}</template>
                     <template v-if="detailTrip.truck_plate"> · {{ detailTrip.truck_plate }}</template>
+                    <template v-if="detailTrip.trailer_plate"> · {{ detailTrip.trailer_plate }}</template>
+                    <template v-if="detailTrip.trailer_plate_2"> / {{ detailTrip.trailer_plate_2 }}</template>
                   </p>
                 </div>
-                <button @click="showDetail = false" class="text-slate-400 hover:text-white">
-                  <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                </button>
+                <div class="flex items-center gap-2">
+                  <button @click="printTrip" title="Imprimir viagem" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white/80 hover:text-white hover:bg-white/10 transition-colors">
+                    <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+                    Imprimir
+                  </button>
+                  <button @click="showDetail = false" class="text-slate-400 hover:text-white">
+                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -809,12 +795,6 @@ onMounted(() => {
                       Pago R$ {{ fmt(detailTrip.legs_freight_received) }}
                     </span>
                   </template>
-                  <template v-else-if="detailTrip.freight_value > 0">
-                    <span
-                      class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                      :class="detailTrip.freight_status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'"
-                    >{{ detailTrip.freight_status === 'pago' ? 'Recebido' : 'A receber' }}</span>
-                  </template>
                 </div>
                 <div class="rounded-lg p-3 text-center" :class="detailTrip.profit >= 0 ? 'bg-green-50' : 'bg-red-50'">
                   <div class="text-[10px] font-bold uppercase mb-1" :class="detailTrip.profit >= 0 ? 'text-green-700' : 'text-red-700'">Lucro</div>
@@ -824,11 +804,6 @@ onMounted(() => {
                 </div>
               </div>
 
-              <!-- Cliente -->
-              <div v-if="detailTrip.client" class="mb-4 bg-blue-50 rounded-lg px-4 py-2.5 text-sm">
-                <span class="text-[10px] font-bold text-blue-600 uppercase">Cliente</span>
-                <span class="ml-2 font-semibold text-blue-900">{{ detailTrip.client }}</span>
-              </div>
 
               <!-- Breakdown -->
               <div class="grid grid-cols-2 gap-4">
@@ -836,18 +811,48 @@ onMounted(() => {
                 <div>
                   <h4 class="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
                     Combustível
-                    <span class="text-[10px] font-normal text-slate-400">({{ detailTrip.fuel_records?.length || 0 }} abastecimentos)</span>
+                    <span class="text-[10px] font-normal text-slate-400">({{ regularFuelRecords.length }} abastecimentos)</span>
                   </h4>
-                  <div v-if="detailTrip.fuel_records?.length" class="space-y-1.5 max-h-[180px] overflow-y-auto">
-                    <div v-for="f in detailTrip.fuel_records" :key="f.id" class="flex justify-between text-xs rounded px-3 py-2 bg-stone-50">
-                      <span class="text-stone-600">{{ fmtDate(f.fuel_date) }} — {{ f.liters }}L @ R${{ Number(f.price_liter).toFixed(3) }}</span>
-                      <span class="font-bold text-stone-600">R$ {{ fmt(f.total) }}</span>
+                  <div v-if="regularFuelRecords.length" class="space-y-1.5 max-h-[180px] overflow-y-auto">
+                    <div v-for="f in regularFuelRecords" :key="f.id" class="flex justify-between text-xs rounded px-3 py-2 bg-stone-50">
+                      <div class="flex flex-col gap-0.5">
+                        <span class="text-stone-600">{{ fmtDate(f.fuel_date) }} — {{ f.liters }}L @ R${{ Number(f.price_liter).toFixed(3) }}</span>
+                        <div class="flex gap-2">
+                          <span v-if="f.vehicle_plate" class="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">{{ f.vehicle_plate }}</span>
+                          <span v-if="f.fuel_type" class="text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">{{ f.fuel_type }}</span>
+                          <span v-if="f.station" class="text-[10px] text-slate-400">{{ f.station }}</span>
+                        </div>
+                      </div>
+                      <span class="font-bold text-stone-600 self-start">R$ {{ fmt(f.total) }}</span>
                     </div>
                   </div>
                   <div v-else class="text-xs text-slate-400 py-2">Nenhum abastecimento no período</div>
                   <div v-if="detailTrip.fuel_total > 0" class="text-xs font-extrabold text-stone-800 mt-2 text-right">
                     Total: R$ {{ fmt(detailTrip.fuel_total) }} · {{ Number(detailTrip.fuel_liters).toLocaleString('pt-BR') }} L
                   </div>
+
+                  <!-- Thermo King separado -->
+                  <template v-if="thermoKingRecords.length">
+                    <h4 class="text-xs font-bold text-slate-800 mt-3 mb-2 flex items-center gap-1.5">
+                      ❄️ Diesel Termo King
+                      <span class="text-[10px] font-normal text-slate-400">(câmara fria)</span>
+                    </h4>
+                    <div class="space-y-1.5 max-h-[140px] overflow-y-auto">
+                      <div v-for="f in thermoKingRecords" :key="f.id" class="flex justify-between text-xs rounded px-3 py-2 bg-cyan-50 border border-cyan-100">
+                        <div class="flex flex-col gap-0.5">
+                          <span class="text-stone-600">{{ fmtDate(f.fuel_date) }} — {{ f.liters }}L @ R${{ Number(f.price_liter).toFixed(3) }}</span>
+                          <div class="flex gap-2">
+                            <span v-if="f.vehicle_plate" class="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">{{ f.vehicle_plate }}</span>
+                            <span v-if="f.station" class="text-[10px] text-slate-400">{{ f.station }}</span>
+                          </div>
+                        </div>
+                        <span class="font-bold text-cyan-700 self-start">R$ {{ fmt(f.total) }}</span>
+                      </div>
+                    </div>
+                    <div class="text-xs font-extrabold text-cyan-800 mt-2 text-right">
+                      Total TK: R$ {{ fmt(detailTrip.thermo_king_total) }} · {{ Number(detailTrip.thermo_king_liters).toLocaleString('pt-BR') }} L
+                    </div>
+                  </template>
                 </div>
 
                 <!-- Despesas -->
@@ -906,4 +911,165 @@ onMounted(() => {
       </div>
     </Teleport>
   </div>
+
+  <!-- ── Área de impressão da viagem ── -->
+  <Teleport to="body">
+    <div v-if="printingTrip" class="trip-print-page">
+
+      <div class="print-logo-header">
+        <img src="/logo-triunfo.png" class="print-logo-img" />
+        <div>
+          <div class="print-logo-name">Transportadora Triunfo</div>
+          <div class="print-logo-sub">Relatório de Viagem</div>
+        </div>
+        <div class="print-logo-date">Emitido em {{ today }}</div>
+      </div>
+
+      <div class="trip-print-title">
+        <h2>{{ printingTrip.origin }} → {{ printingTrip.destination }}</h2>
+        <div class="trip-print-meta">
+          <span><strong>Motorista:</strong> {{ printingTrip.driver_name }}</span>
+          <span><strong>Período:</strong> {{ fmtDate(printingTrip.start_date) }}{{ printingTrip.end_date ? ' → ' + fmtDate(printingTrip.end_date) : '' }}</span>
+          <span v-if="printingTrip.truck_plate"><strong>Cavalo:</strong> {{ printingTrip.truck_plate }}</span>
+          <span v-if="printingTrip.trailer_plate"><strong>Carreta:</strong> {{ printingTrip.trailer_plate }}{{ printingTrip.trailer_plate_2 ? ' / ' + printingTrip.trailer_plate_2 : '' }}</span>
+        </div>
+      </div>
+
+      <div class="trip-print-kpis">
+        <div><span>Distância</span><strong>{{ printingTrip.distance > 0 ? fmtInt(printingTrip.distance) + ' km' : '—' }}</strong></div>
+        <div><span>Km/L</span><strong>{{ printingTrip.avg_consumption ? printingTrip.avg_consumption + ' km/L' : '—' }}</strong></div>
+        <div><span>Combustível</span><strong>R$ {{ fmt(printingTrip.fuel_total) }}</strong></div>
+        <div><span>Despesas</span><strong>R$ {{ fmt(printingTrip.payable_expenses_total) }}</strong></div>
+        <div><span>Frete</span><strong>R$ {{ fmt(printingTrip.revenue) }}</strong></div>
+        <div class="trip-print-kpi-lucro" :class="printingTrip.profit >= 0 ? 'lucro-pos' : 'lucro-neg'">
+          <span>Lucro</span>
+          <strong>{{ printingTrip.profit >= 0 ? '+' : '' }}R$ {{ fmt(printingTrip.profit) }}</strong>
+        </div>
+      </div>
+
+      <!-- Trechos -->
+      <template v-if="printingTrip.legs?.length">
+        <h3 class="trip-print-section">Trechos da Rota</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Origem</th><th>Destino</th><th>Carga</th><th>Saída</th><th>Chegada</th><th>Cliente</th><th>Frete</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="leg in printingTrip.legs" :key="leg.id">
+              <td>{{ leg.origin }}</td>
+              <td>{{ leg.destination }}</td>
+              <td>{{ leg.cargo || '—' }}</td>
+              <td>{{ leg.departure_date ? fmtDate(leg.departure_date) : '—' }}</td>
+              <td>{{ leg.arrival_date ? fmtDate(leg.arrival_date) : '—' }}</td>
+              <td>{{ leg.client || '—' }}</td>
+              <td>{{ leg.freight_value > 0 ? 'R$ ' + fmt(leg.freight_value) : '—' }}</td>
+              <td>{{ leg.freight_status === 'pago' ? 'Pago' : leg.freight_status === 'a_receber' ? 'A receber' : '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+
+      <!-- Combustível: lado a lado quando tem TK -->
+      <div style="display:flex; gap:12px; align-items:flex-start">
+        <!-- Combustível (sem Thermo King) -->
+        <div v-if="printingTrip.fuel_records?.filter(f => f.fuel_type !== 'Diesel Termo King').length" :style="printingTrip.fuel_records?.filter(f => f.fuel_type === 'Diesel Termo King').length ? 'flex:1' : 'flex:1'">
+          <h3 class="trip-print-section">Combustível</h3>
+          <table>
+            <thead>
+              <tr><th>Data</th><th>Placa</th><th>Tipo</th><th>Litros</th><th>Preço/L</th><th>Posto</th><th>Total</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="f in printingTrip.fuel_records.filter(f => f.fuel_type !== 'Diesel Termo King')" :key="f.id">
+                <td>{{ fmtDate(f.fuel_date) }}</td>
+                <td>{{ f.vehicle_plate || '—' }}</td>
+                <td>{{ f.fuel_type || '—' }}</td>
+                <td>{{ Number(f.liters).toFixed(2) }} L</td>
+                <td>R$ {{ Number(f.price_liter).toFixed(3) }}</td>
+                <td>{{ f.station || '—' }}</td>
+                <td><strong>R$ {{ fmt(f.total) }}</strong></td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr><td colspan="6"><strong>Total Combustível</strong></td><td><strong>R$ {{ fmt(printingTrip.fuel_total) }}</strong></td></tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- Diesel Termo King (câmara fria) -->
+        <div v-if="printingTrip.fuel_records?.filter(f => f.fuel_type === 'Diesel Termo King').length" style="flex:0 0 38%">
+          <h3 class="trip-print-section">❄️ Diesel Termo King</h3>
+          <table>
+            <thead>
+              <tr><th>Litros</th><th>Preço/L</th><th>Total</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="f in printingTrip.fuel_records.filter(f => f.fuel_type === 'Diesel Termo King')" :key="f.id">
+                <td>{{ Number(f.liters).toFixed(2) }} L</td>
+                <td>R$ {{ Number(f.price_liter).toFixed(3) }}</td>
+                <td><strong>R$ {{ fmt(f.total) }}</strong></td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr><td colspan="2"><strong>Total TK</strong></td><td><strong>R$ {{ fmt(printingTrip.thermo_king_total) }}</strong></td></tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- Despesas -->
+      <template v-if="printingTrip.payable_expenses?.length">
+        <h3 class="trip-print-section">Despesas (Contas a Pagar)</h3>
+        <table>
+          <thead>
+            <tr><th>Descrição</th><th>Categoria</th><th>Fornecedor</th><th>Vencimento</th><th>Valor</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="e in printingTrip.payable_expenses" :key="e.id">
+              <td>{{ e.description || '—' }}</td>
+              <td>{{ e.category || '—' }}</td>
+              <td>{{ e.supplier_name || '—' }}</td>
+              <td>{{ e.due_date ? fmtDate(e.due_date) : '—' }}</td>
+              <td><strong>R$ {{ fmt(e.value) }}</strong></td>
+              <td>{{ e.status === 'pago' ? 'Pago' : 'Pendente' }}</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr><td colspan="4"><strong>Total Despesas</strong></td><td><strong>R$ {{ fmt(printingTrip.payable_expenses_total) }}</strong></td></tr>
+          </tfoot>
+        </table>
+      </template>
+
+      <!-- Resumo financeiro -->
+      <div class="trip-print-summary">
+        <div class="trip-print-summary-row" style="font-weight:700">
+          <span>Frete / Receita Total</span><span>+ R$ {{ fmt(printingTrip.revenue) }}</span>
+        </div>
+        <template v-for="leg in (printingTrip.legs || [])" :key="'sum-leg-'+leg.id">
+          <div v-if="leg.freight_value > 0" class="trip-print-summary-row" style="padding-left:18px; font-size:8.5px; color:#64748b">
+            <span>{{ leg.origin }} → {{ leg.destination }}</span><span>R$ {{ fmt(leg.freight_value) }}</span>
+          </div>
+        </template>
+        <div class="trip-print-summary-row">
+          <span>Combustível</span><span>— R$ {{ fmt(printingTrip.fuel_total) }}</span>
+        </div>
+        <div v-if="printingTrip.thermo_king_total > 0" class="trip-print-summary-row">
+          <span>Diesel Termo King</span><span>— R$ {{ fmt(printingTrip.thermo_king_total) }}</span>
+        </div>
+        <div class="trip-print-summary-row">
+          <span>Despesas</span><span>— R$ {{ fmt(printingTrip.payable_expenses_total) }}</span>
+        </div>
+        <div class="trip-print-summary-row trip-print-result" :class="printingTrip.profit >= 0 ? 'result-pos' : 'result-neg'">
+          <span>Resultado</span>
+          <span>{{ printingTrip.profit >= 0 ? '+' : '' }}R$ {{ fmt(printingTrip.profit) }}</span>
+        </div>
+      </div>
+
+      <div v-if="printingTrip.obs" class="trip-print-obs">
+        <strong>Observações:</strong> {{ printingTrip.obs }}
+      </div>
+
+    </div>
+  </Teleport>
 </template>

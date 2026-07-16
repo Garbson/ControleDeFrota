@@ -54,13 +54,13 @@ router.post(
     const errors = validationResult(req)
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() })
 
-    const { driver_id, vehicle_id, liters, price_liter, station, fuel_date, obs } = req.body
+    const { driver_id, vehicle_id, liters, price_liter, station, fuel_type, fuel_date, obs } = req.body
     const total = parseFloat(liters) * parseFloat(price_liter)
 
     try {
       const result = await query(
-        'INSERT INTO fuel_records (driver_id, vehicle_id, liters, price_liter, total, station, fuel_date, obs) VALUES (?,?,?,?,?,?,?,?)',
-        [driver_id || null, vehicle_id || null, liters, price_liter, total.toFixed(2), station || null, fuel_date, obs || null]
+        'INSERT INTO fuel_records (driver_id, vehicle_id, liters, price_liter, total, station, fuel_type, fuel_date, obs) VALUES (?,?,?,?,?,?,?,?,?)',
+        [driver_id || null, vehicle_id || null, liters, price_liter, total.toFixed(2), station || null, fuel_type || null, fuel_date, obs || null]
       )
       res.status(201).json({ id: result.insertId, total, message: 'Abastecimento registrado' })
     } catch (err) {
@@ -70,12 +70,12 @@ router.post(
 )
 
 router.put('/:id', async (req, res) => {
-  const { driver_id, vehicle_id, liters, price_liter, station, fuel_date, obs } = req.body
+  const { driver_id, vehicle_id, liters, price_liter, station, fuel_type, fuel_date, obs } = req.body
   const total = parseFloat(liters) * parseFloat(price_liter)
   try {
     await query(
-      'UPDATE fuel_records SET driver_id=?, vehicle_id=?, liters=?, price_liter=?, total=?, station=?, fuel_date=?, obs=? WHERE id=?',
-      [driver_id || null, vehicle_id || null, liters, price_liter, total.toFixed(2), station || null, fuel_date, obs || null, req.params.id]
+      'UPDATE fuel_records SET driver_id=?, vehicle_id=?, liters=?, price_liter=?, total=?, station=?, fuel_type=?, fuel_date=?, obs=? WHERE id=?',
+      [driver_id || null, vehicle_id || null, liters, price_liter, total.toFixed(2), station || null, fuel_type || null, fuel_date, obs || null, req.params.id]
     )
     res.json({ message: 'Abastecimento atualizado' })
   } catch (err) {

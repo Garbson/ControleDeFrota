@@ -55,4 +55,14 @@ router.put('/:id', async (req, res) => {
   }
 })
 
+router.delete('/:id', async (req, res) => {
+  try {
+    const result = await query('DELETE FROM vehicles WHERE id = ?', [req.params.id])
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Veículo não encontrado' })
+    res.json({ message: 'Veículo excluído' })
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao excluir veículo' })
+  }
+})
+
 module.exports = router

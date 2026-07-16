@@ -12,9 +12,9 @@ router.get('/summary', async (req, res) => {
       SELECT
         COUNT(*)                                                                    AS total_trips,
         COALESCE(SUM(CASE WHEN final_km > initial_km THEN final_km - initial_km ELSE 0 END), 0) AS total_km,
-        COALESCE(SUM(freight_value), 0)                                             AS total_freight,
-        COALESCE(SUM(CASE WHEN freight_status = 'pago'       THEN freight_value ELSE 0 END), 0) AS total_received,
-        COALESCE(SUM(CASE WHEN freight_status = 'a_receber'  THEN freight_value ELSE 0 END), 0) AS total_pending
+        COALESCE((SELECT SUM(freight_value) FROM trip_legs), 0)                   AS total_freight,
+        COALESCE((SELECT SUM(freight_value) FROM trip_legs WHERE freight_status = 'pago'), 0) AS total_received,
+        COALESCE((SELECT SUM(freight_value) FROM trip_legs WHERE freight_status = 'a_receber'), 0) AS total_pending
       FROM trips
     `)
     res.json(row)
@@ -35,15 +35,18 @@ router.get('/', async (req, res) => {
         d.name  AS driver_name,
         v2.plate AS truck_plate,
         v3.plate AS trailer_plate,
+        v4.plate AS trailer_plate_2,
         (CASE WHEN t.final_km > t.initial_km THEN t.final_km - t.initial_km ELSE 0 END) AS distance,
         COALESCE((SELECT SUM(freight_value) FROM trip_legs WHERE trip_id = t.id), 0) AS legs_freight_total,
         COALESCE((SELECT SUM(freight_value) FROM trip_legs WHERE trip_id = t.id AND freight_status = 'pago'), 0) AS legs_freight_received,
         COALESCE((SELECT SUM(freight_value) FROM trip_legs WHERE trip_id = t.id AND freight_status = 'a_receber'), 0) AS legs_freight_pending,
-        (SELECT COUNT(*) FROM trip_legs WHERE trip_id = t.id) AS legs_count
+        (SELECT COUNT(*) FROM trip_legs WHERE trip_id = t.id) AS legs_count,
+        COALESCE((SELECT SUM(value) FROM accounts_payable WHERE trip_id = t.id), 0) AS payable_expenses_total
       FROM trips t
       JOIN  drivers  d  ON d.id  = t.driver_id
       LEFT JOIN vehicles v2 ON v2.id = t.truck_id
       LEFT JOIN vehicles v3 ON v3.id = t.trailer_id
+      LEFT JOIN vehicles v4 ON v4.id = t.trailer_id_2
       WHERE 1=1
     `
     if (driver_id) { params.push(driver_id); sql += ` AND t.driver_id = ?` }
@@ -57,7 +60,8 @@ router.get('/', async (req, res) => {
       const endDate = trip.end_date || trip.start_date
 
       const [fuelRow] = await query(
-        `SELECT COALESCE(SUM(total), 0) AS total, COALESCE(SUM(liters), 0) AS liters
+        `SELECT COALESCE(SUM(total), 0) AS total,
+                COALESCE(SUM(CASE WHEN COALESCE(fuel_type,'') != 'Diesel Termo King' THEN liters ELSE 0 END), 0) AS liters
          FROM fuel_records
          WHERE driver_id = ? AND fuel_date >= ? AND fuel_date <= ?`,
         [trip.driver_id, trip.start_date, endDate]
@@ -72,11 +76,8 @@ router.get('/', async (req, res) => {
       trip.fuel_total      = Number(fuelRow.total)
       trip.fuel_liters     = Number(fuelRow.liters)
       trip.expenses_total  = Number(expRow.total)
-      trip.total_cost      = trip.fuel_total + trip.expenses_total
-      // Se tem trechos, receita vem da soma dos fretes dos trechos
-      trip.revenue = Number(trip.legs_count) > 0
-        ? Number(trip.legs_freight_total)
-        : Number(trip.freight_value || 0)
+      trip.total_cost      = trip.fuel_total + trip.expenses_total + Number(trip.payable_expenses_total || 0)
+      trip.revenue = Number(trip.legs_freight_total || 0)
       trip.profit          = trip.revenue - trip.total_cost
       trip.avg_consumption = trip.fuel_liters > 0 && trip.distance > 0
         ? (trip.distance / trip.fuel_liters).toFixed(2)
@@ -101,11 +102,13 @@ router.get('/:id', async (req, res) => {
         v2.brand   AS truck_brand,
         v2.model   AS truck_model,
         v3.plate   AS trailer_plate,
+        v4.plate   AS trailer_plate_2,
         (CASE WHEN t.final_km > t.initial_km THEN t.final_km - t.initial_km ELSE 0 END) AS distance
       FROM trips t
       JOIN  drivers  d  ON d.id  = t.driver_id
       LEFT JOIN vehicles v2 ON v2.id = t.truck_id
       LEFT JOIN vehicles v3 ON v3.id = t.trailer_id
+      LEFT JOIN vehicles v4 ON v4.id = t.trailer_id_2
       WHERE t.id = ?
     `, [req.params.id])
 
@@ -115,13 +118,19 @@ router.get('/:id', async (req, res) => {
     trip.distance    = Number(trip.distance)
 
     trip.fuel_records = await query(
-      `SELECT * FROM fuel_records
-       WHERE driver_id = ? AND fuel_date >= ? AND fuel_date <= ?
-       ORDER BY fuel_date`,
+      `SELECT fr.*, fr.fuel_type, v.plate AS vehicle_plate
+       FROM fuel_records fr
+       LEFT JOIN vehicles v ON v.id = fr.vehicle_id
+       WHERE fr.driver_id = ? AND fr.fuel_date >= ? AND fr.fuel_date <= ?
+       ORDER BY fr.fuel_date`,
       [trip.driver_id, trip.start_date, endDate]
     )
-    trip.fuel_total  = trip.fuel_records.reduce((s, f) => s + Number(f.total), 0)
-    trip.fuel_liters = trip.fuel_records.reduce((s, f) => s + Number(f.liters), 0)
+    const regularFuel   = trip.fuel_records.filter(f => f.fuel_type !== 'Diesel Termo King')
+    const thermoKing    = trip.fuel_records.filter(f => f.fuel_type === 'Diesel Termo King')
+    trip.fuel_total         = regularFuel.reduce((s, f) => s + Number(f.total), 0)
+    trip.fuel_liters        = regularFuel.reduce((s, f) => s + Number(f.liters), 0)
+    trip.thermo_king_total  = thermoKing.reduce((s, f) => s + Number(f.total), 0)
+    trip.thermo_king_liters = thermoKing.reduce((s, f) => s + Number(f.liters), 0)
 
     trip.expenses = await query(
       `SELECT * FROM expenses
@@ -131,11 +140,12 @@ router.get('/:id', async (req, res) => {
     )
     trip.expenses_total = trip.expenses.reduce((s, e) => s + (Number(e.value) * e.qty), 0)
 
-    // Contas a pagar vinculadas diretamente à viagem
+    // Contas a pagar: vinculadas à viagem OU do motorista no período sem trip_id
     trip.payable_expenses = await query(
-      `SELECT ap.*, d.name AS driver_name
+      `SELECT ap.*, COALESCE(s.name, ap.supplier_name_free) AS supplier_name, d.name AS driver_name
        FROM accounts_payable ap
        LEFT JOIN drivers d ON d.id = ap.driver_id
+       LEFT JOIN suppliers s ON s.id = ap.supplier_id
        WHERE ap.trip_id = ?
        ORDER BY ap.due_date ASC`,
       [trip.id]
@@ -155,9 +165,7 @@ router.get('/:id', async (req, res) => {
       trip.receivable = null
     }
 
-    trip.total_cost      = trip.fuel_total + trip.expenses_total + trip.payable_expenses_total
-    trip.revenue         = Number(trip.freight_value || 0)
-    trip.profit          = trip.revenue - trip.total_cost
+    trip.total_cost      = trip.fuel_total + trip.thermo_king_total + trip.expenses_total + trip.payable_expenses_total
     trip.avg_consumption = trip.fuel_liters > 0 && trip.distance > 0
       ? Number((trip.distance / trip.fuel_liters).toFixed(2))
       : null
@@ -167,11 +175,9 @@ router.get('/:id', async (req, res) => {
       [trip.id]
     )
 
-    // Se há trechos, receita = soma dos fretes dos trechos
-    if (trip.legs.length > 0) {
-      trip.revenue = trip.legs.reduce((s, l) => s + Number(l.freight_value || 0), 0)
-    }
-    trip.profit = trip.revenue - trip.total_cost
+    const legsFreight = trip.legs.reduce((s, l) => s + Number(l.freight_value || 0), 0)
+    trip.revenue = legsFreight
+    trip.profit  = trip.revenue - trip.total_cost
 
     res.json(trip)
   } catch (err) {
@@ -192,7 +198,7 @@ router.post('/', [
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() })
 
   const {
-    driver_id, truck_id, trailer_id,
+    driver_id, truck_id, trailer_id, trailer_id_2,
     origin, destination, cargo, client,
     initial_km, final_km, start_date, end_date,
     freight_value, freight_status,
@@ -205,14 +211,15 @@ router.post('/', [
   try {
     const result = await query(
       `INSERT INTO trips
-         (driver_id, truck_id, trailer_id, origin, destination, cargo, client,
+         (driver_id, truck_id, trailer_id, trailer_id_2, origin, destination, cargo, client,
           initial_km, final_km, start_date, end_date,
           freight_value, freight_status, obs)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         driver_id,
-        truck_id   || null,
-        trailer_id || null,
+        truck_id     || null,
+        trailer_id   || null,
+        trailer_id_2 || null,
         origin, destination,
         cargo  || null,
         client || null,
@@ -276,7 +283,7 @@ router.put('/:id', [
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() })
 
   const {
-    driver_id, truck_id, trailer_id,
+    driver_id, truck_id, trailer_id, trailer_id_2,
     origin, destination, cargo, client,
     initial_km, final_km, start_date, end_date,
     freight_value, freight_status,
@@ -289,15 +296,16 @@ router.put('/:id', [
   try {
     const result = await query(
       `UPDATE trips SET
-         driver_id=?, truck_id=?, trailer_id=?,
+         driver_id=?, truck_id=?, trailer_id=?, trailer_id_2=?,
          origin=?, destination=?, cargo=?, client=?,
          initial_km=?, final_km=?, start_date=?, end_date=?,
          freight_value=?, freight_status=?, obs=?
        WHERE id=?`,
       [
         driver_id,
-        truck_id   || null,
-        trailer_id || null,
+        truck_id     || null,
+        trailer_id   || null,
+        trailer_id_2 || null,
         origin, destination,
         cargo  || null,
         client || null,

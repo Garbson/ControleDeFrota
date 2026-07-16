@@ -1,19 +1,68 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { usePayable } from '../../composables/usePayable'
 import { useDrivers } from '../../composables/useDrivers'
+import { useVehicles } from '../../composables/useVehicles'
+import { useSuppliers } from '../../composables/useSuppliers'
 import KPICard from '../ui/KPICard.vue'
 
 const props = defineProps({ showToast: Function })
 
-const { items, summary, loading, fetchAll, fetchSummary, markPaid, update, remove, uploadReceipt, deleteReceipt } = usePayable()
+const { items, summary, loading, fetchAll, fetchSummary, markPaid, update, remove, uploadReceipt, deleteReceipt, uploadInvoice, deleteInvoice } = usePayable()
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
+const { vehicles, fetchAll: fetchVehicles } = useVehicles()
+const { suppliers, fetchAll: fetchSuppliers } = useSuppliers()
+
+// ── Edit: busca de placa
+const editPlateInput = ref('')
+const editPlateOpen = ref(false)
+const editPlateSuggestions = computed(() => {
+  if (!editPlateInput.value) return vehicles.value.slice(0, 10)
+  const q = editPlateInput.value.toLowerCase()
+  return vehicles.value.filter(v => v.plate.toLowerCase().includes(q)).slice(0, 10)
+})
+function selectEditPlate(plate) {
+  editPlateInput.value = plate
+  editForm.value.vehicle_id = vehicles.value.find(v => v.plate === plate)?.id || null
+  editPlateOpen.value = false
+}
+function blurEditPlate() { setTimeout(() => { editPlateOpen.value = false }, 150) }
+
+// ── Edit: busca de fornecedor
+const editSupplierSearch = ref('')
+const editSupplierOpen = ref(false)
+const editSupplierFiltered = computed(() => {
+  if (!editSupplierSearch.value) return suppliers.value.slice(0, 10)
+  const q = editSupplierSearch.value.toLowerCase()
+  return suppliers.value.filter(s => s.name.toLowerCase().includes(q) || (s.cnpj && s.cnpj.includes(q))).slice(0, 10)
+})
+function selectEditSupplier(s) {
+  editSupplierSearch.value = s.name
+  editForm.value.supplier_id = s.id
+  editForm.value.supplier_name_free = null
+  editSupplierOpen.value = false
+}
+function clearEditSupplier() {
+  editSupplierSearch.value = ''
+  editForm.value.supplier_id = null
+  editForm.value.supplier_name_free = null
+}
+function blurEditSupplier() {
+  setTimeout(() => {
+    editSupplierOpen.value = false
+    // Se não selecionou da lista, salva o texto digitado como fornecedor livre
+    if (!editForm.value.supplier_id) {
+      editForm.value.supplier_name_free = editSupplierSearch.value.trim() || null
+    }
+  }, 150)
+}
+
 
 const editingPayable = ref(null)
 const viewingPayable = ref(null)
 const editSaving = ref(false)
 const editError = ref('')
-const editForm = ref({ value: '', due_date: '', description: '', category: '', obs: '' })
+const editForm = ref({ value: '', due_date: '', description: '', category: '', obs: '', vehicle_id: null, supplier_id: null, supplier_name_free: null })
 
 // ── Upload de comprovante
 const receiptUploading = ref(null) // id da conta com upload em andamento
@@ -64,6 +113,48 @@ function isImage(url) {
   return /\.(jpg|jpeg|png|webp)$/i.test(url || '')
 }
 
+// ── Upload de nota fiscal
+const invoiceUploading = ref(null)
+const invoiceInput = ref(null)
+const invoiceTarget = ref(null)
+
+function triggerInvoiceUpload(item) {
+  invoiceTarget.value = item
+  invoiceInput.value?.click()
+}
+
+async function handleInvoiceFile(e) {
+  const file = e.target.files?.[0]
+  if (!file || !invoiceTarget.value) return
+  invoiceUploading.value = invoiceTarget.value.id
+  try {
+    await uploadInvoice(invoiceTarget.value.id, file)
+    props.showToast?.('✅ Nota fiscal enviada')
+  } catch (err) {
+    props.showToast?.('❌ ' + (err.message || 'Erro ao enviar nota fiscal'))
+  } finally {
+    invoiceUploading.value = null
+    invoiceTarget.value = null
+    e.target.value = ''
+  }
+}
+
+async function handleDeleteInvoice(item) {
+  if (!confirm('Remover a nota fiscal?')) return
+  try {
+    await deleteInvoice(item.id)
+    props.showToast?.('✅ Nota fiscal removida')
+  } catch {
+    props.showToast?.('❌ Erro ao remover nota fiscal')
+  }
+}
+
+function invoiceUrl(item) {
+  if (!item?.invoice_url) return null
+  const base = import.meta.env.VITE_API_URL || '/api'
+  return item.invoice_url.startsWith('http') ? item.invoice_url : base.replace('/api', '') + item.invoice_url
+}
+
 function openEditPayable(c) {
   editingPayable.value = c
   editForm.value = {
@@ -72,7 +163,12 @@ function openEditPayable(c) {
     description: c.description || c.document || '',
     category: c.category || 'administrativo',
     obs: c.obs || '',
+    vehicle_id: c.vehicle_id || null,
+    supplier_id: c.supplier_id || null,
+    supplier_name_free: c.supplier_name_free || null,
   }
+  editPlateInput.value = c.vehicle_plate || ''
+  editSupplierSearch.value = c.supplier_name || c.supplier_name_free || ''
   editError.value = ''
 }
 
@@ -80,6 +176,8 @@ async function saveEditPayable() {
   if (!editForm.value.value || !editForm.value.due_date) { editError.value = 'Valor e vencimento obrigatórios'; return }
   editSaving.value = true
   editError.value = ''
+  // Captura texto livre direto do campo caso o blur/timeout não tenha rodado ainda
+  const supplierFree = editForm.value.supplier_id ? null : (editSupplierSearch.value.trim() || null)
   try {
     await update(editingPayable.value.id, {
       value: Number(editForm.value.value),
@@ -88,10 +186,11 @@ async function saveEditPayable() {
       category: editForm.value.category,
       obs: editForm.value.obs || null,
       driver_id: editingPayable.value.driver_id || null,
-      vehicle_id: editingPayable.value.vehicle_id || null,
-      supplier_id: editingPayable.value.supplier_id || null,
+      vehicle_id: editForm.value.vehicle_id || null,
+      supplier_id: editForm.value.supplier_id || null,
+      supplier_name_free: supplierFree,
       document: editingPayable.value.document || null,
-      issue_date: editingPayable.value.issue_date || null,
+      issue_date: editingPayable.value.issue_date ? String(editingPayable.value.issue_date).split('T')[0] : null,
       status: editingPayable.value.status,
     })
     editingPayable.value = null
@@ -172,6 +271,8 @@ onMounted(() => {
   fetchAll()
   fetchSummary()
   fetchDrivers()
+  fetchVehicles()
+  fetchSuppliers()
 })
 </script>
 
@@ -184,6 +285,14 @@ onMounted(() => {
       accept="image/jpeg,image/png,image/webp,application/pdf"
       class="hidden"
       @change="handleReceiptFile"
+    />
+    <!-- Hidden file input para notas fiscais -->
+    <input
+      ref="invoiceInput"
+      type="file"
+      accept="image/jpeg,image/png,image/webp,application/pdf"
+      class="hidden"
+      @change="handleInvoiceFile"
     />
 
     <!-- Loading -->
@@ -311,6 +420,17 @@ onMounted(() => {
                     <svg v-if="receiptUploading === c.id" class="animate-spin" width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4V2A10 10 0 002 12h2a8 8 0 018-8z"/></svg>
                     <svg v-else width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M21.586 10.461l-7.047-7.047a2 2 0 00-2.828 0L4 11.125V20h8.875l7.711-7.711a2 2 0 000-2.828zm-8.875 7.539H6v-6.703L12.703 4l6.703 6.703L12.711 18zM10 18l-1-4 4 1-3 3z"/></svg>
                   </button>
+                  <!-- Upload nota fiscal -->
+                  <button
+                    @click="triggerInvoiceUpload(c)"
+                    title="Nota Fiscal"
+                    class="p-1.5 rounded-md transition-colors inline-flex"
+                    :class="c.invoice_url ? 'text-purple-600 bg-purple-50 hover:bg-purple-100' : 'text-stone-400 bg-stone-50 hover:bg-stone-100'"
+                    :disabled="invoiceUploading === c.id"
+                  >
+                    <svg v-if="invoiceUploading === c.id" class="animate-spin" width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4V2A10 10 0 002 12h2a8 8 0 018-8z"/></svg>
+                    <svg v-else width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                  </button>
                   <button v-if="c.status === 'pendente'" @click="handleMarkPaid(c)" class="btn-p !py-1.5 !px-3 text-xs">
                     Pagar
                   </button>
@@ -365,6 +485,59 @@ onMounted(() => {
                 <option value="administrativo">Administrativo</option>
               </select>
             </div>
+            <!-- Placa -->
+            <div class="relative">
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">Placa</label>
+              <input
+                v-model="editPlateInput"
+                type="text"
+                placeholder="Ex: ABC1D23"
+                class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
+                @focus="editPlateOpen = true"
+                @blur="blurEditPlate"
+                @input="editForm.vehicle_id = null"
+              />
+              <ul v-if="editPlateOpen && editPlateSuggestions.length" class="absolute z-50 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-40 overflow-y-auto text-sm">
+                <li v-for="v in editPlateSuggestions" :key="v.id"
+                  class="px-3 py-2 cursor-pointer hover:bg-blue-50 font-mono font-bold text-slate-700"
+                  @mousedown.prevent="selectEditPlate(v.plate)">
+                  {{ v.plate }} <span class="font-normal text-slate-400 ml-2">{{ v.brand }} {{ v.model }}</span>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Fornecedor -->
+            <div class="relative">
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">
+                Fornecedor
+                <span v-if="editForm.supplier_id" class="ml-1.5 text-[10px] font-semibold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">cadastrado</span>
+                <span v-else-if="editSupplierSearch" class="ml-1.5 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">livre</span>
+              </label>
+              <div class="relative">
+                <input
+                  v-model="editSupplierSearch"
+                  type="text"
+                  placeholder="Nome do fornecedor (cadastrado ou livre)"
+                  class="w-full border rounded-lg px-3 py-2.5 pr-8 text-sm focus:outline-none focus:ring-2"
+                  :class="editForm.supplier_id ? 'border-green-300 focus:ring-green-400' : 'border-stone-200 focus:ring-blue-500'"
+                  @focus="editSupplierOpen = true"
+                  @blur="blurEditSupplier"
+                  @input="editForm.supplier_id = null; editForm.supplier_name_free = null"
+                />
+                <button v-if="editSupplierSearch" @mousedown.prevent="clearEditSupplier" type="button"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
+                  <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+              </div>
+              <ul v-if="editSupplierOpen && editSupplierFiltered.length" class="absolute z-50 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-40 overflow-y-auto text-sm">
+                <li v-for="s in editSupplierFiltered" :key="s.id"
+                  class="px-3 py-2 cursor-pointer hover:bg-blue-50 text-slate-700"
+                  @mousedown.prevent="selectEditSupplier(s)">
+                  {{ s.name }}
+                </li>
+              </ul>
+            </div>
+
             <div>
               <label class="block text-xs font-bold text-stone-600 mb-1.5">Observação</label>
               <textarea v-model="editForm.obs" rows="2" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
@@ -464,12 +637,59 @@ onMounted(() => {
                 <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
                 Ver PDF
               </a>
-              <button
-                @click="handleDeleteReceipt(viewingPayable)"
-                class="mt-2 text-xs text-red-500 hover:text-red-700 underline"
+              <div class="mt-2 flex items-center gap-3">
+                <a
+                  :href="receiptUrl(viewingPayable)"
+                  :download="'comprovante_' + viewingPayable.id"
+                  class="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                >
+                  <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                  Baixar
+                </a>
+                <button
+                  @click="handleDeleteReceipt(viewingPayable)"
+                  class="text-xs text-red-500 hover:text-red-700 underline"
+                >
+                  Remover comprovante
+                </button>
+              </div>
+            </div>
+            <!-- Nota Fiscal -->
+            <div v-if="viewingPayable.invoice_url" class="col-span-2">
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-2">Nota Fiscal</div>
+              <div v-if="isImage(viewingPayable.invoice_url)" class="rounded-lg overflow-hidden border border-purple-200 bg-purple-50/30">
+                <img
+                  :src="invoiceUrl(viewingPayable)"
+                  alt="Nota Fiscal"
+                  class="w-full max-h-[300px] object-contain cursor-pointer"
+                  @click="window.open(invoiceUrl(viewingPayable), '_blank')"
+                />
+              </div>
+              <a
+                v-else
+                :href="invoiceUrl(viewingPayable)"
+                target="_blank"
+                class="inline-flex items-center gap-2 px-4 py-2.5 bg-purple-50 text-purple-700 rounded-lg text-sm font-semibold hover:bg-purple-100 transition-colors border border-purple-200"
               >
-                Remover comprovante
-              </button>
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                Ver PDF
+              </a>
+              <div class="mt-2 flex items-center gap-3">
+                <a
+                  :href="invoiceUrl(viewingPayable)"
+                  :download="'nota_fiscal_' + viewingPayable.id"
+                  class="inline-flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-800 font-semibold"
+                >
+                  <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                  Baixar
+                </a>
+                <button
+                  @click="handleDeleteInvoice(viewingPayable)"
+                  class="text-xs text-red-500 hover:text-red-700 underline"
+                >
+                  Remover nota fiscal
+                </button>
+              </div>
             </div>
           </div>
           <div class="px-7 py-4 border-t border-stone-100 flex justify-end">

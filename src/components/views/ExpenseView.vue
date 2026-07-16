@@ -1,12 +1,138 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useDrivers } from '../../composables/useDrivers'
+import { useVehicles } from '../../composables/useVehicles'
+import { useSuppliers } from '../../composables/useSuppliers'
+import { usePayable } from '../../composables/usePayable'
 import { api } from '../../composables/useApi'
 
 const props = defineProps({ showToast: Function })
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
+const { vehicles, fetchAll: fetchVehicles } = useVehicles()
+const { suppliers, fetchAll: fetchSuppliers, create: createSupplier } = useSuppliers()
+const { uploadInvoice } = usePayable()
 
-const form = ref({ driver_id: '', type: '', qty: 1, value: '', date: '', due_date: '', description: '', obs: '' })
+const form = ref({ driver_id: '', type: '', qty: 1, value: '', date: '', due_date: '', description: '', obs: '', plate: '', vehicle_id: '', supplier_id: '', supplier_name_free: null })
+const invoiceFile = ref(null)
+const invoiceInput = ref(null)
+const submitting = ref(false)
+
+function selectInvoice() {
+  invoiceInput.value?.click()
+}
+
+function onInvoiceSelected(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+
+  if (file.size > 5 * 1024 * 1024) {
+    props.showToast?.('❌ A nota fiscal deve ter no máximo 5 MB')
+    return
+  }
+
+  if (!/\.(jpg|jpeg|png|pdf|webp)$/i.test(file.name)) {
+    props.showToast?.('❌ Formato inválido. Use JPG, PNG, WEBP ou PDF')
+    return
+  }
+
+  invoiceFile.value = file
+}
+
+// ── Placa: auto-preenche com a placa do motorista selecionado
+const plateInput = ref('')
+const plateSuggestions = computed(() => {
+  if (!plateInput.value) return vehicles.value.slice(0, 15)
+  const q = plateInput.value.toLowerCase()
+  return vehicles.value.filter(v => v.plate.toLowerCase().includes(q)).slice(0, 15)
+})
+
+watch(() => form.value.driver_id, (newId) => {
+  if (!newId || newId === '__outros__') {
+    form.value.plate = ''
+    form.value.vehicle_id = ''
+    plateInput.value = ''
+    return
+  }
+  const driver = drivers.value.find(d => d.id == newId)
+  if (driver?.truck_plate) {
+    form.value.plate = driver.truck_plate
+    plateInput.value = driver.truck_plate
+    // busca o vehicle_id correspondente
+    const v = vehicles.value.find(v => v.plate === driver.truck_plate)
+    form.value.vehicle_id = v?.id || ''
+  } else {
+    form.value.plate = ''
+    form.value.vehicle_id = ''
+    plateInput.value = ''
+  }
+})
+
+function selectPlate(plate) {
+  plateInput.value = plate
+  form.value.plate = plate
+  const v = vehicles.value.find(v => v.plate === plate)
+  form.value.vehicle_id = v?.id || ''
+}
+
+// ── Fornecedor: busca por nome ou CNPJ
+const supplierSearch = ref('')
+const showSupplierDropdown = ref(false)
+const supplierCreating = ref(false)
+
+const supplierExactMatch = computed(() => {
+  if (!supplierSearch.value) return null
+  const q = supplierSearch.value.toLowerCase().trim()
+  return suppliers.value.find(s =>
+    s.name.toLowerCase() === q || (s.cnpj && s.cnpj.replace(/\D/g, '') === q.replace(/\D/g, ''))
+  ) || null
+})
+
+const supplierFiltered = computed(() => {
+  if (!supplierSearch.value) return suppliers.value.slice(0, 15)
+  const q = supplierSearch.value.toLowerCase()
+  const matches = suppliers.value.filter(s =>
+    s.name.toLowerCase().includes(q) || (s.cnpj && s.cnpj.includes(q))
+  ).slice(0, 15)
+  return matches
+})
+
+const showCreateOption = computed(() => {
+  return supplierSearch.value.trim().length >= 2 && !supplierExactMatch.value
+})
+
+function selectSupplier(s) {
+  supplierSearch.value = s.name
+  form.value.supplier_id = s.id
+  showSupplierDropdown.value = false
+}
+
+async function createNewSupplier() {
+  const name = supplierSearch.value.trim()
+  if (!name || name.length < 2) return
+  supplierCreating.value = true
+  try {
+    const result = await createSupplier({ name })
+    form.value.supplier_id = result.id
+    supplierSearch.value = name
+    showSupplierDropdown.value = false
+    props.showToast?.(`✅ Fornecedor "${name}" criado`)
+  } catch (err) {
+    props.showToast?.('❌ Erro ao criar fornecedor: ' + (err.message || ''))
+  } finally {
+    supplierCreating.value = false
+  }
+}
+
+function clearSupplier() {
+  supplierSearch.value = ''
+  form.value.supplier_id = ''
+}
+
+function blurSupplier() {
+  setTimeout(() => { showSupplierDropdown.value = false }, 200)
+}
+
 const parcelar = ref(false)
 const numParcelas = ref(2)
 const customParcelas = ref([])
@@ -18,6 +144,11 @@ const isOutros = computed(() => form.value.driver_id === '__outros__')
 const formDriverName = computed(() => {
   if (isOutros.value) return 'Outros'
   return drivers.value.find(d => d.id == form.value.driver_id)?.name || ''
+})
+
+const formSupplierName = computed(() => {
+  if (!form.value.supplier_id) return ''
+  return suppliers.value.find(s => s.id == form.value.supplier_id)?.name || ''
 })
 
 const formValid = computed(() => form.value.driver_id && form.value.type && form.value.value && form.value.date)
@@ -47,40 +178,80 @@ function getCategory() {
 }
 
 async function submitExpense() {
-  if (!formValid.value) return
+  if (!formValid.value || submitting.value) return
+  submitting.value = true
+  const createdIds = []
+  let successMessage = ''
+
   try {
     const category = getCategory()
     const description = form.value.description || expenseTypes[form.value.type]
     const driverId = isOutros.value ? null : (form.value.driver_id || null)
+    const supplierId = form.value.supplier_id || null
+    const supplierFree = supplierId ? null : (supplierSearch.value.trim() || null)
     if (parcelar.value && customParcelas.value.length >= 2) {
       const total = customParcelas.value.length
       for (let i = 0; i < total; i++) {
         const p = customParcelas.value[i]
-        await api.post('/payable', {
+        const created = await api.post('/payable', {
           category, description: `${description} (${i + 1}/${total})`,
           driver_id: driverId, issue_date: form.value.date || null,
           value: Number(Number(p.value).toFixed(2)), due_date: p.date, obs: form.value.obs || null,
+          vehicle_id: form.value.vehicle_id || null,
+          supplier_id: supplierId,
+          supplier_name_free: supplierFree,
         })
+        createdIds.push(created.id)
       }
-      props.showToast?.(`✅ ${total} parcelas lançadas para ${formDriverName.value}`)
+      successMessage = `✅ ${total} parcelas lançadas para ${formDriverName.value}`
     } else {
-      await api.post('/payable', {
+      const created = await api.post('/payable', {
         category, description, driver_id: driverId,
         issue_date: form.value.date || null, value: Number(form.value.value),
         due_date: form.value.due_date || form.value.date, obs: form.value.obs || null,
+        vehicle_id: form.value.vehicle_id || null,
+        supplier_id: supplierId,
+        supplier_name_free: supplierFree,
       })
-      props.showToast?.(`✅ Despesa salva para ${formDriverName.value}`)
+      createdIds.push(created.id)
+      successMessage = `✅ Despesa salva para ${formDriverName.value}`
     }
+
+    if (invoiceFile.value) {
+      try {
+        for (const id of createdIds) {
+          await uploadInvoice(id, invoiceFile.value)
+        }
+        successMessage += ' com nota fiscal'
+      } catch (err) {
+        props.showToast?.(`⚠️ Despesa salva, mas a nota fiscal não foi enviada: ${err.message || 'erro no upload'}`)
+        resetForm()
+        return
+      }
+    }
+
+    props.showToast?.(successMessage)
     resetForm()
-  } catch { props.showToast?.('❌ Erro ao salvar despesa') }
+  } catch (err) {
+    props.showToast?.(`❌ ${err.message || 'Erro ao salvar despesa'}`)
+  } finally {
+    submitting.value = false
+  }
 }
 
 function resetForm() {
-  form.value = { driver_id: '', type: '', qty: 1, value: '', date: '', due_date: '', description: '', obs: '' }
+  form.value = { driver_id: '', type: '', qty: 1, value: '', date: '', due_date: '', description: '', obs: '', plate: '', vehicle_id: '', supplier_id: '', supplier_name_free: null }
+  plateInput.value = ''
+  supplierSearch.value = ''
+  invoiceFile.value = null
   parcelar.value = false; numParcelas.value = 2; customParcelas.value = []
 }
 
-onMounted(() => fetchDrivers())
+onMounted(() => {
+  fetchDrivers()
+  fetchVehicles()
+  fetchSuppliers()
+})
 </script>
 
 <template>
@@ -109,6 +280,22 @@ onMounted(() => fetchDrivers())
               <option v-for="d in drivers" :key="d.id" :value="d.id">{{ d.name }}</option>
               <option value="__outros__">— Outros</option>
             </select>
+          </div>
+
+          <div class="relative">
+            <label class="flabel">Placa <span class="font-normal normal-case text-slate-400">(auto do motorista, editável)</span></label>
+            <input
+              v-model="plateInput"
+              type="text"
+              placeholder="Digite ou selecione a placa..."
+              class="finput"
+              list="plate-list"
+              @input="selectPlate(plateInput)"
+              @focus="$event.target.select()"
+            />
+            <datalist id="plate-list">
+              <option v-for="v in vehicles" :key="v.id" :value="v.plate">{{ v.plate }} — {{ v.brand }} {{ v.model }}</option>
+            </datalist>
           </div>
 
           <div>
@@ -152,6 +339,90 @@ onMounted(() => fetchDrivers())
           <div>
             <label class="flabel">Observação</label>
             <input v-model="form.obs" placeholder="Informações adicionais..." class="finput" />
+          </div>
+
+          <div class="relative">
+            <label class="flabel">Fornecedor <span class="font-normal normal-case text-slate-400">(busca por nome ou CNPJ)</span></label>
+            <div class="relative">
+              <input
+                v-model="supplierSearch"
+                type="text"
+                placeholder="Digite nome ou CNPJ do fornecedor..."
+                class="finput pr-8"
+                @focus="showSupplierDropdown = true"
+                @blur="blurSupplier"
+                @input="showSupplierDropdown = true; form.supplier_id = ''"
+              />
+              <button
+                v-if="form.supplier_id"
+                @click="clearSupplier"
+                type="button"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                title="Limpar fornecedor"
+              >
+                <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+              </button>
+            </div>
+            <!-- Dropdown de sugestões -->
+            <div
+              v-if="showSupplierDropdown && (supplierFiltered.length || showCreateOption)"
+              class="absolute z-50 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg max-h-[220px] overflow-y-auto"
+            >
+              <div
+                v-for="s in supplierFiltered"
+                :key="s.id"
+                @mousedown.prevent="selectSupplier(s)"
+                class="px-4 py-2.5 cursor-pointer hover:bg-blue-50 transition-colors border-b border-stone-50 last:border-0 flex flex-col"
+                :class="{ 'bg-blue-50/50': form.supplier_id === s.id }"
+              >
+                <span class="text-[13px] font-semibold text-stone-800">{{ s.name }}</span>
+                <span v-if="s.cnpj" class="text-[11px] text-slate-400">{{ s.cnpj }}</span>
+              </div>
+              <!-- Opção de criar novo fornecedor -->
+              <div
+                v-if="showCreateOption"
+                @mousedown.prevent="createNewSupplier()"
+                class="px-4 py-2.5 cursor-pointer hover:bg-emerald-50 transition-colors border-b border-stone-50 last:border-0 flex items-center gap-2"
+                :class="{ 'opacity-50 pointer-events-none': supplierCreating }"
+              >
+                <svg v-if="supplierCreating" class="animate-spin" width="14" height="14" fill="#10b981" viewBox="0 0 24 24"><path d="M12 4V2A10 10 0 002 12h2a8 8 0 018-8z"/></svg>
+                <svg v-else width="14" height="14" fill="#10b981" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                <span class="text-[13px] font-semibold text-emerald-700">
+                  {{ supplierCreating ? 'Criando...' : `Criar fornecedor "${supplierSearch.trim()}"` }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-span-2">
+            <label class="flabel">Nota fiscal <span class="font-normal normal-case text-slate-400">(opcional · JPG, PNG, WEBP ou PDF · até 5 MB)</span></label>
+            <input
+              ref="invoiceInput"
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp,.pdf"
+              class="hidden"
+              @change="onInvoiceSelected"
+            />
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed transition-colors cursor-pointer text-left"
+                :class="invoiceFile ? 'border-purple-300 bg-purple-50 text-purple-700' : 'border-stone-300 bg-stone-50/60 text-stone-500 hover:bg-stone-100'"
+                @click="selectInvoice"
+              >
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" class="flex-shrink-0"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm1 7V3.5L18.5 9H15zm-4 9H9v-4H6l4-4 4 4h-3v4z"/></svg>
+                <span class="truncate text-[12px] font-semibold">{{ invoiceFile ? invoiceFile.name : 'Selecionar arquivo da nota fiscal' }}</span>
+              </button>
+              <button
+                v-if="invoiceFile"
+                type="button"
+                class="px-3 py-2.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 text-[12px] font-semibold cursor-pointer border border-red-100"
+                @click="invoiceFile = null"
+              >
+                Remover
+              </button>
+            </div>
+            <p v-if="parcelar && invoiceFile" class="text-[10px] text-purple-500 mt-1">A nota será anexada a todas as parcelas.</p>
           </div>
         </div>
 
@@ -213,20 +484,23 @@ onMounted(() => fetchDrivers())
           <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Resumo</div>
           <div class="flex flex-wrap gap-x-6 gap-y-1 text-[12px]">
             <div class="flex gap-1.5"><span class="text-slate-400">Motorista:</span><strong class="text-stone-600">{{ formDriverName }}</strong></div>
+            <div v-if="form.plate" class="flex gap-1.5"><span class="text-slate-400">Placa:</span><strong class="text-blue-700 font-mono">{{ form.plate }}</strong></div>
             <div class="flex gap-1.5"><span class="text-slate-400">Tipo:</span><strong class="text-stone-600">{{ expenseTypes[form.type] }}</strong></div>
             <div class="flex gap-1.5"><span class="text-slate-400">{{ parcelar ? 'Total' : 'Valor' }}:</span><strong class="text-blue-600">R$ {{ Number(form.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) }}</strong><span v-if="parcelar && customParcelas.length" class="text-slate-400">({{ customParcelas.length }}×)</span></div>
+            <div v-if="formSupplierName" class="flex gap-1.5"><span class="text-slate-400">Fornecedor:</span><strong class="text-stone-600">{{ formSupplierName }}</strong></div>
           </div>
         </div>
 
         <!-- Ações -->
         <div class="flex justify-between items-center mt-5 pt-4 border-t border-stone-100">
-          <button @click="resetForm" class="px-5 py-2 rounded-xl text-stone-600 hover:text-stone-800 text-[13px] font-semibold transition-colors cursor-pointer" style="background:rgba(0,0,0,0.05);border:1px solid rgba(0,0,0,0.09)">
+          <button @click="resetForm" :disabled="submitting" class="px-5 py-2 rounded-xl text-stone-600 hover:text-stone-800 disabled:opacity-40 text-[13px] font-semibold transition-colors cursor-pointer" style="background:rgba(0,0,0,0.05);border:1px solid rgba(0,0,0,0.09)">
             Limpar
           </button>
-          <button @click="submitExpense" :disabled="!formValid"
+          <button @click="submitExpense" :disabled="!formValid || submitting"
             class="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-white text-[13px] font-bold transition-colors cursor-pointer shadow-sm shadow-blue-200 border-0">
-            <svg width="14" height="14" fill="white" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-            {{ parcelar ? `Lançar ${customParcelas.length} Parcelas` : 'Salvar Lançamento' }}
+            <svg v-if="submitting" class="animate-spin" width="14" height="14" fill="white" viewBox="0 0 24 24"><path d="M12 4V2A10 10 0 002 12h2a8 8 0 018-8z"/></svg>
+            <svg v-else width="14" height="14" fill="white" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+            {{ submitting ? 'Salvando...' : (parcelar ? `Lançar ${customParcelas.length} Parcelas` : 'Salvar Lançamento') }}
           </button>
         </div>
       </div>

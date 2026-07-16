@@ -21,7 +21,30 @@ const storage = multer.diskStorage({
 })
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /\.(jpg|jpeg|png|pdf|webp)$/i
+    if (allowed.test(path.extname(file.originalname))) {
+      cb(null, true)
+    } else {
+      cb(new Error('Formato inválido. Use JPG, PNG, WEBP ou PDF.'))
+    }
+  },
+})
+
+// ── Configuração do multer para notas fiscais
+const invoicesDir = path.join(__dirname, '..', '..', 'uploads', 'invoices')
+if (!fs.existsSync(invoicesDir)) fs.mkdirSync(invoicesDir, { recursive: true })
+const invoiceStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, invoicesDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname)
+    cb(null, `invoice_${req.params.id}_${Date.now()}${ext}`)
+  },
+})
+const invoiceUpload = multer({
+  storage: invoiceStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = /\.(jpg|jpeg|png|pdf|webp)$/i
     if (allowed.test(path.extname(file.originalname))) {
@@ -37,7 +60,8 @@ router.get('/', async (req, res) => {
   try {
     const { status, category, from, to } = req.query
     let sql = `
-      SELECT ap.*, d.name AS driver_name, v.plate AS vehicle_plate, s.name AS supplier_name,
+      SELECT ap.*, d.name AS driver_name, v.plate AS vehicle_plate,
+             COALESCE(s.name, ap.supplier_name_free) AS supplier_name,
              CONCAT(t.origin, ' → ', t.destination) AS trip_label
       FROM accounts_payable ap
       LEFT JOIN drivers d ON d.id = ap.driver_id
@@ -94,21 +118,24 @@ router.post(
     const errors = validationResult(req)
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() })
 
-    const { document, description, supplier_id, driver_id, vehicle_id, trip_id, category, value, issue_date, due_date, obs } = req.body
+    const { document, description, supplier_id, supplier_name_free, driver_id, vehicle_id, trip_id, category, value, issue_date, due_date, obs } = req.body
     try {
       // Auto-detecta viagem ativa se não vier trip_id explícito
       const refDate = issue_date || due_date
       const resolvedTripId = trip_id || await findActiveTrip(driver_id, refDate)
+      // supplier_name_free só é salvo quando não há supplier_id
+      const resolvedFree = supplier_id ? null : (supplier_name_free || null)
 
       const result = await query(
         `INSERT INTO accounts_payable
-          (document, description, supplier_id, driver_id, vehicle_id, trip_id, category, value, issue_date, due_date, obs)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-        [document || null, description || null, supplier_id || null, driver_id || null,
-         vehicle_id || null, resolvedTripId || null, category, value, issue_date || null, due_date, obs || null]
+          (document, description, supplier_id, supplier_name_free, driver_id, vehicle_id, trip_id, category, value, issue_date, due_date, obs)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [document || null, description || null, supplier_id || null, resolvedFree,
+         driver_id || null, vehicle_id || null, resolvedTripId || null, category, value, issue_date || null, due_date, obs || null]
       )
       res.status(201).json({ id: result.insertId, message: 'Conta criada' })
     } catch (err) {
+      console.error('[POST /payable]', err.message)
       res.status(500).json({ error: 'Erro ao criar conta' })
     }
   }
@@ -130,18 +157,20 @@ router.patch('/:id/pay', async (req, res) => {
 
 // PUT /payable/:id
 router.put('/:id', async (req, res) => {
-  const { document, description, supplier_id, driver_id, vehicle_id, trip_id, category, value, issue_date, due_date, status, obs } = req.body
+  const { document, description, supplier_id, supplier_name_free, driver_id, vehicle_id, trip_id, category, value, issue_date, due_date, status, obs } = req.body
+  const resolvedFree = supplier_id ? null : (supplier_name_free || null)
   try {
     await query(
       `UPDATE accounts_payable SET
-        document=?, description=?, supplier_id=?, driver_id=?, vehicle_id=?, trip_id=?,
+        document=?, description=?, supplier_id=?, supplier_name_free=?, driver_id=?, vehicle_id=?, trip_id=?,
         category=?, value=?, issue_date=?, due_date=?, status=?, obs=?
        WHERE id=?`,
-      [document || null, description || null, supplier_id || null, driver_id || null,
+      [document || null, description || null, supplier_id || null, resolvedFree, driver_id || null,
        vehicle_id || null, trip_id || null, category, value, issue_date || null, due_date, status, obs || null, req.params.id]
     )
     res.json({ message: 'Conta atualizada' })
   } catch (err) {
+    console.error('[PUT /payable]', err.message, err.stack)
     res.status(500).json({ error: 'Erro ao atualizar conta' })
   }
 })
@@ -192,6 +221,41 @@ router.delete('/:id/receipt', async (req, res) => {
     res.json({ message: 'Comprovante removido' })
   } catch (err) {
     res.status(500).json({ error: 'Erro ao remover comprovante' })
+  }
+})
+
+// POST /payable/:id/invoice — upload de nota fiscal
+router.post('/:id/invoice', invoiceUpload.single('invoice'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Nenhum arquivo enviado' })
+  }
+  const invoiceUrl = `/uploads/invoices/${req.file.filename}`
+  try {
+    const [current] = await query('SELECT invoice_url FROM accounts_payable WHERE id = ?', [req.params.id])
+    if (current?.invoice_url) {
+      const oldPath = path.join(__dirname, '..', '..', current.invoice_url)
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath)
+    }
+    await query('UPDATE accounts_payable SET invoice_url = ? WHERE id = ?', [invoiceUrl, req.params.id])
+    res.json({ invoice_url: invoiceUrl, message: 'Nota fiscal enviada' })
+  } catch (err) {
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
+    res.status(500).json({ error: 'Erro ao salvar nota fiscal' })
+  }
+})
+
+// DELETE /payable/:id/invoice — remover nota fiscal
+router.delete('/:id/invoice', async (req, res) => {
+  try {
+    const [current] = await query('SELECT invoice_url FROM accounts_payable WHERE id = ?', [req.params.id])
+    if (current?.invoice_url) {
+      const filePath = path.join(__dirname, '..', '..', current.invoice_url)
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+    }
+    await query('UPDATE accounts_payable SET invoice_url = NULL WHERE id = ?', [req.params.id])
+    res.json({ message: 'Nota fiscal removida' })
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao remover nota fiscal' })
   }
 })
 

@@ -113,6 +113,16 @@ onMounted(() => applyFilter())
 
 <template>
   <div>
+    <!-- Cabeçalho de impressão: oculto na tela, aparece em cada página impressa -->
+    <div class="print-logo-header">
+      <img src="/logo-triunfo.png" alt="Transportadora Triunfo" class="print-logo-img" />
+      <div>
+        <div class="print-logo-name">Transportadora Triunfo</div>
+        <div class="print-logo-sub">Relatório Gerencial · {{ periodoLabel }}</div>
+      </div>
+      <div class="print-logo-date">Emitido em {{ today }}</div>
+    </div>
+
     <!-- Filtro de período -->
     <div class="glass rounded-[11px] py-3.5 px-[18px] mb-4 flex gap-3 items-center flex-wrap print:hidden">
       <span class="text-xs font-bold text-slate-500">PERÍODO:</span>
@@ -194,45 +204,45 @@ onMounted(() => applyFilter())
         </div>
 
         <div v-if="!payableItems.length" class="text-center text-slate-400 text-xs py-10">Nenhuma conta no período selecionado</div>
-        <table v-else class="w-full border-collapse mt-4">
+        <table v-else class="w-full border-collapse mt-4 report-table">
+          <colgroup>
+            <col style="width:10%">
+            <col style="width:56%">
+            <col style="width:10%">
+            <col style="width:12%">
+            <col style="width:12%">
+          </colgroup>
           <thead>
             <tr>
-              <th class="th">Vencimento</th>
               <th class="th">Valor</th>
               <th class="th">Documento</th>
               <th class="th">Placa</th>
               <th class="th">Motorista</th>
-              <th class="th">Status</th>
+              <th class="th">Fornecedor</th>
             </tr>
           </thead>
           <tbody>
             <template v-for="group in payableByDate" :key="group.date">
               <tr class="bg-stone-100/70">
-                <td class="td font-extrabold text-slate-800 text-xs" colspan="6">
+                <td class="td font-extrabold text-slate-800 text-xs" colspan="5">
                   {{ fmtDate(group.date) }} — Total: R$ {{ fmt(group.total) }}
                 </td>
               </tr>
               <tr class="trow" v-for="c in group.items" :key="c.id">
-                <td class="td text-xs text-slate-500">{{ fmtDate(c.due_date) }}</td>
                 <td class="td font-bold text-stone-800 text-xs whitespace-nowrap">R$ {{ fmt(c.value) }}</td>
-                <td class="td text-[11px] max-w-[320px] truncate">{{ c.description || c.document || '—' }}</td>
+                <td class="td text-[11px]">{{ c.description || c.document || '—' }}</td>
                 <td class="td">
                   <span v-if="c.vehicle_plate" class="font-mono text-[10px] font-bold text-slate-500 bg-stone-100/70 px-1.5 py-0.5 rounded">{{ c.vehicle_plate }}</span>
                   <span v-else class="text-stone-600">—</span>
                 </td>
                 <td class="td text-xs font-semibold text-stone-600">{{ c.driver_name || '—' }}</td>
-                <td class="td">
-                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                    :class="c.status === 'pago' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'">
-                    {{ c.status === 'pago' ? 'Pago' : 'Pendente' }}
-                  </span>
-                </td>
+                <td class="td text-xs text-stone-500">{{ c.supplier_name || '—' }}</td>
               </tr>
             </template>
           </tbody>
           <tfoot>
             <tr class="bg-stone-100/70">
-              <td class="td font-extrabold text-stone-800 text-sm" colspan="6">Total Geral: R$ {{ fmt(payableTotal) }}</td>
+              <td class="td font-extrabold text-stone-800 text-sm" colspan="5">Total Geral: R$ {{ fmt(payableTotal) }}</td>
             </tr>
           </tfoot>
         </table>
@@ -256,7 +266,7 @@ onMounted(() => applyFilter())
         </div>
 
         <div v-if="!byDriver.length" class="text-center text-slate-400 text-xs py-10">Nenhuma despesa no período selecionado</div>
-        <table v-else class="w-full border-collapse mt-4">
+        <table v-else class="w-full border-collapse mt-4 report-table">
           <thead>
             <tr>
               <th class="th">Motorista</th>
@@ -320,7 +330,7 @@ onMounted(() => applyFilter())
         </div>
 
         <div v-if="!fuelRecords.length" class="text-center text-slate-400 text-xs py-10">Nenhum abastecimento no período selecionado</div>
-        <table v-else class="w-full border-collapse mt-4">
+        <table v-else class="w-full border-collapse mt-4 report-table">
           <thead>
             <tr>
               <th class="th">Motorista</th>

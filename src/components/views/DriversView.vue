@@ -4,7 +4,9 @@ import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
 import { api } from '../../composables/useApi'
 
-const { drivers, loading, fetchAll, fetchOne } = useDrivers()
+const props = defineProps({ showToast: Function })
+
+const { drivers, loading, fetchAll, fetchOne, remove } = useDrivers()
 const { vehicles, fetchAll: fetchVehicles } = useVehicles()
 
 const dSort = ref('tires-desc')
@@ -18,6 +20,21 @@ const newSaving = ref(false)
 const newError = ref('')
 const editingDriver = ref(null)
 const COLORS = ['#2563eb','#7c3aed','#059669','#d97706','#dc2626','#0891b2','#f59e0b','#10b981','#6366f1','#ec4899','#f97316','#14b8a6']
+
+function fmtDate(raw) {
+  if (!raw) return '—'
+  return new Date(raw).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+}
+
+async function deleteDriver(d) {
+  if (!confirm(`Excluir motorista "${d.name}"?`)) return
+  try {
+    await remove(d.id)
+    props.showToast?.('Motorista excluído')
+  } catch {
+    props.showToast?.('❌ Erro ao excluir motorista')
+  }
+}
 
 function openEditDriver(d) {
   editingDriver.value = d
@@ -217,6 +234,13 @@ onMounted(() => {
             >
               <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
             </button>
+            <button
+              @click.stop="deleteDriver(d)"
+              title="Excluir"
+              class="text-red-600 bg-red-50 hover:bg-red-100 p-1.5 rounded-md transition-colors"
+            >
+              <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            </button>
           </div>
         </div>
         <div v-if="!sortedDrivers.length" class="text-center text-slate-400 text-xs py-10">Nenhum motorista encontrado</div>
@@ -283,7 +307,7 @@ onMounted(() => {
                 </div>
                 <div class="text-right">
                   <div class="text-xs font-extrabold text-stone-800">{{ h.qty }} un</div>
-                  <div class="text-[10px] text-slate-400">{{ h.assigned_at?.split('T')[0] || '—' }}</div>
+                  <div class="text-[10px] text-slate-400">{{ fmtDate(h.assigned_at) }}</div>
                 </div>
               </div>
             </div>

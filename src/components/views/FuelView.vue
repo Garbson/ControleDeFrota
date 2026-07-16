@@ -2,34 +2,70 @@
 import { ref, computed, onMounted } from 'vue'
 import { useFuel } from '../../composables/useFuel'
 import { useDrivers } from '../../composables/useDrivers'
+import { useVehicles } from '../../composables/useVehicles'
 import KPICard from '../ui/KPICard.vue'
 
 const props = defineProps({ showToast: Function })
 
-const { records, loading, fetchAll, create, update } = useFuel()
+const { records, loading, fetchAll, create, update, remove } = useFuel()
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
+const { vehicles, fetchAll: fetchVehicles } = useVehicles()
+
+function fmtDate(raw) {
+  if (!raw) return '—'
+  return new Date(raw).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+}
 
 const fuelSort = ref('data-desc')
 const showFuelForm = ref(false)
 const editingFuel = ref(null)
 const viewingFuel = ref(null)
 
+const plateInput = ref('')
+
+const plateSuggestions = computed(() => {
+  if (!plateInput.value) return vehicles.value.slice(0, 15)
+  const q = plateInput.value.toLowerCase()
+  return vehicles.value.filter(v => v.plate.toLowerCase().includes(q)).slice(0, 15)
+})
+
+function selectPlate(plate) {
+  plateInput.value = plate
+  const v = vehicles.value.find(v => v.plate === plate)
+  fuelForm.value.vehicle_id = v?.id || ''
+}
+
+const fuelTypes = ['Diesel S10', 'Diesel S500', 'Diesel Termo King', 'Arla 32']
+
 const fuelForm = ref({
-  driver_id: '', vehicle_id: '', liters: '', price_liter: '', station: '', fuel_date: '', obs: ''
+  driver_id: '', vehicle_id: '', liters: '', price_liter: '', station: '', fuel_type: '', fuel_date: '', obs: ''
 })
 
 function openEditFuel(f) {
   editingFuel.value = f
+  plateInput.value = f.vehicle_plate || ''
   fuelForm.value = {
     driver_id: f.driver_id || '',
     vehicle_id: f.vehicle_id || '',
     liters: f.liters,
     price_liter: f.price_liter,
     station: f.station || '',
+    fuel_type: f.fuel_type || '',
     fuel_date: f.fuel_date?.split('T')[0] || f.fuel_date || '',
     obs: f.obs || '',
   }
   showFuelForm.value = true
+}
+
+async function deleteFuel(f) {
+  const driver = f.driver_name || 'registro'
+  if (!confirm(`Excluir abastecimento de ${driver} em ${f.fuel_date?.split('T')[0] || ''}?`)) return
+  try {
+    await remove(f.id)
+    props.showToast?.('Abastecimento excluído')
+  } catch {
+    props.showToast?.('❌ Erro ao excluir abastecimento')
+  }
 }
 
 const sortedRecords = computed(() => {
@@ -65,6 +101,7 @@ async function submitFuel() {
       liters: Number(fuelForm.value.liters),
       price_liter: Number(fuelForm.value.price_liter),
       station: fuelForm.value.station || null,
+      fuel_type: fuelForm.value.fuel_type || null,
       fuel_date: fuelForm.value.fuel_date,
       obs: fuelForm.value.obs || null,
     }
@@ -78,7 +115,8 @@ async function submitFuel() {
     }
     showFuelForm.value = false
     editingFuel.value = null
-    fuelForm.value = { driver_id: '', vehicle_id: '', liters: '', price_liter: '', station: '', fuel_date: '', obs: '' }
+    plateInput.value = ''
+    fuelForm.value = { driver_id: '', vehicle_id: '', liters: '', price_liter: '', station: '', fuel_type: '', fuel_date: '', obs: '' }
   } catch (e) {
     props.showToast?.('❌ Erro ao salvar abastecimento')
   }
@@ -89,6 +127,7 @@ const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigit
 onMounted(() => {
   fetchAll()
   fetchDrivers()
+  fetchVehicles()
 })
 </script>
 
@@ -127,6 +166,7 @@ onMounted(() => {
             <th class="th">Data</th>
             <th class="th">Motorista</th>
             <th class="th">Placa</th>
+            <th class="th">Tipo</th>
             <th class="th">Litros</th>
             <th class="th">Preço/L</th>
             <th class="th">Total</th>
@@ -136,10 +176,14 @@ onMounted(() => {
         </thead>
         <tbody>
           <tr class="trow" v-for="f in sortedRecords" :key="f.id">
-            <td class="td font-medium whitespace-nowrap">{{ f.fuel_date }}</td>
+            <td class="td font-medium whitespace-nowrap">{{ fmtDate(f.fuel_date) }}</td>
             <td class="td font-semibold text-stone-800 text-xs">{{ f.driver_name || '—' }}</td>
             <td class="td">
               <span v-if="f.vehicle_plate" class="font-mono text-xs font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded">{{ f.vehicle_plate }}</span>
+              <span v-else class="text-slate-400 text-xs">—</span>
+            </td>
+            <td class="td">
+              <span v-if="f.fuel_type" class="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">{{ f.fuel_type }}</span>
               <span v-else class="text-slate-400 text-xs">—</span>
             </td>
             <td class="td font-bold text-stone-800">{{ f.liters }} L</td>
@@ -161,6 +205,13 @@ onMounted(() => {
                   class="text-blue-600 bg-blue-50 hover:bg-blue-100 p-1.5 rounded-md transition-colors inline-flex"
                 >
                   <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                </button>
+                <button
+                  @click="deleteFuel(f)"
+                  title="Excluir"
+                  class="text-red-600 bg-red-50 hover:bg-red-100 p-1.5 rounded-md transition-colors inline-flex"
+                >
+                  <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                 </button>
               </div>
             </td>
@@ -190,6 +241,28 @@ onMounted(() => {
               <div>
                 <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Data *</label>
                 <input v-model="fuelForm.fuel_date" type="date" class="finput" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Placa</label>
+                <input
+                  v-model="plateInput"
+                  type="text"
+                  placeholder="Digite ou selecione a placa..."
+                  class="finput"
+                  list="fuel-plate-list"
+                  @input="selectPlate(plateInput)"
+                  @focus="$event.target.select()"
+                />
+                <datalist id="fuel-plate-list">
+                  <option v-for="v in plateSuggestions" :key="v.id" :value="v.plate">{{ v.plate }} — {{ v.brand }} {{ v.model }}</option>
+                </datalist>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Tipo de Combustível</label>
+                <select v-model="fuelForm.fuel_type" class="finput">
+                  <option value="">Selecione...</option>
+                  <option v-for="t in fuelTypes" :key="t" :value="t">{{ t }}</option>
+                </select>
               </div>
               <div>
                 <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Litros *</label>
@@ -234,7 +307,7 @@ onMounted(() => {
           <div class="px-7 py-6 grid grid-cols-2 gap-4">
             <div>
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Data</div>
-              <div class="text-sm font-semibold text-slate-800">{{ viewingFuel.fuel_date ? new Date(viewingFuel.fuel_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—' }}</div>
+              <div class="text-sm font-semibold text-slate-800">{{ fmtDate(viewingFuel.fuel_date) }}</div>
             </div>
             <div>
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Motorista</div>
@@ -243,6 +316,10 @@ onMounted(() => {
             <div>
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Placa</div>
               <div class="text-sm font-mono font-bold text-blue-800">{{ viewingFuel.vehicle_plate || '—' }}</div>
+            </div>
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Tipo de Combustível</div>
+              <div class="text-sm font-semibold text-amber-700">{{ viewingFuel.fuel_type || '—' }}</div>
             </div>
             <div>
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Posto</div>

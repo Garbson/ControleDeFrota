@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../composables/useApi', () => ({
+  getAccessToken: vi.fn(() => 'test-access-token'),
   api: {
     get: vi.fn(),
     post: vi.fn(),
@@ -61,5 +62,26 @@ describe('usePayable', () => {
 
     expect(api.post).toHaveBeenCalledWith('/payable', expect.objectContaining({ value: 500 }))
     expect(result.id).toBe(10)
+  })
+
+  it('uploadInvoice envia a nota fiscal e atualiza o item local', async () => {
+    const { usePayable } = await import('../composables/usePayable')
+    const { items, uploadInvoice } = usePayable()
+    items.value = [{ id: 10, invoice_url: null }]
+
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ invoice_url: '/uploads/invoices/invoice_10.pdf' }),
+    })
+
+    const file = new File(['nota'], 'nota.pdf', { type: 'application/pdf' })
+    await uploadInvoice(10, file)
+
+    expect(fetch).toHaveBeenCalledWith('/api/payable/10/invoice', expect.objectContaining({
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-access-token' },
+      body: expect.any(FormData),
+    }))
+    expect(items.value[0].invoice_url).toBe('/uploads/invoices/invoice_10.pdf')
   })
 })

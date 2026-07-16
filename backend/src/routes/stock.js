@@ -124,4 +124,23 @@ router.post(
   }
 )
 
+// DELETE /stock/movements/:id
+router.delete('/movements/:id', async (req, res) => {
+  try {
+    const [mov] = await query('SELECT * FROM movements WHERE id = ?', [req.params.id])
+    if (!mov) return res.status(404).json({ error: 'Movimentação não encontrada' })
+
+    if (mov.stock_item_id) {
+      const op = mov.type === 'entrada' ? '-' : '+'
+      await query(`UPDATE stock_items SET qty = GREATEST(qty ${op} ?, 0) WHERE id = ?`, [mov.qty, mov.stock_item_id])
+    }
+
+    await query('DELETE FROM movements WHERE id = ?', [req.params.id])
+    res.json({ message: 'Movimentação excluída' })
+  } catch (err) {
+    console.error('Delete movement error:', err)
+    res.status(500).json({ error: 'Erro ao excluir movimentação' })
+  }
+})
+
 module.exports = router

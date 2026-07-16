@@ -172,6 +172,8 @@ CREATE TABLE IF NOT EXISTS accounts_payable (
   paid_date    DATE,
   status       ENUM('pendente','pago','vencido','cancelado') NOT NULL DEFAULT 'pendente',
   obs          TEXT,
+  receipt_url  VARCHAR(500),
+  invoice_url  VARCHAR(500),
   created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL,

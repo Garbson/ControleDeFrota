@@ -3,4 +3,4 @@
 -- =========================================================
 
 ALTER TABLE accounts_payable
-  ADD COLUMN receipt_url VARCHAR(500) NULL AFTER obs;
+  ADD COLUMN IF NOT EXISTS receipt_url VARCHAR(500) NULL AFTER obs;

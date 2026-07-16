@@ -8,9 +8,29 @@ import KPICard from '../ui/KPICard.vue'
 
 const props = defineProps({ showToast: Function })
 
-const { items, movements, loading, fetchAll, fetchMovements, createMovement } = useStock()
+const { items, movements, loading, fetchAll, fetchMovements, createMovement, remove, removeMovement } = useStock()
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
 const { vehicles, fetchAll: fetchVehicles } = useVehicles()
+
+async function deleteStock(s) {
+  if (!confirm(`Excluir item "${s.description}"?`)) return
+  try {
+    await remove(s.id)
+    props.showToast?.('Item excluído')
+  } catch {
+    props.showToast?.('❌ Erro ao excluir item')
+  }
+}
+
+async function deleteMovement(m) {
+  if (!confirm(`Excluir movimentação de ${m.qty} un de "${m.item_name || 'item'}"?`)) return
+  try {
+    await removeMovement(m.id)
+    props.showToast?.('Movimentação excluída')
+  } catch {
+    props.showToast?.('❌ Erro ao excluir movimentação')
+  }
+}
 
 const sFilter = ref('all')
 const sSort = ref('qty-desc')
@@ -154,6 +174,10 @@ async function confirmEntry() {
 }
 
 const fmtValue = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+function fmtDate(raw) {
+  if (!raw) return '—'
+  return new Date(raw).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+}
 
 onMounted(() => {
   fetchAll()
@@ -237,9 +261,18 @@ onMounted(() => {
               <span v-if="s.nf_number" class="font-mono text-[11.5px] bg-stone-100/70 px-2 py-[3px] rounded-[5px] text-stone-600 font-bold">NF {{ s.nf_number }}</span>
               <span v-else class="text-slate-400 text-xs">—</span>
             </td>
-            <td class="td text-slate-500 text-xs">{{ s.entry_date || '—' }}</td>
+            <td class="td text-slate-500 text-xs">{{ fmtDate(s.entry_date) }}</td>
             <td class="td text-center">
-              <button @click="openExit(s)" class="btn-p !py-1.5 !px-3 text-xs" :disabled="s.qty <= 0">Registrar Saída</button>
+              <div class="flex items-center justify-center gap-1.5">
+                <button @click="openExit(s)" class="btn-p !py-1.5 !px-3 text-xs" :disabled="s.qty <= 0">Registrar Saída</button>
+                <button
+                  @click="deleteStock(s)"
+                  title="Excluir"
+                  class="text-red-600 bg-red-50 hover:bg-red-100 p-1.5 rounded-md transition-colors inline-flex"
+                >
+                  <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -257,12 +290,12 @@ onMounted(() => {
         <thead>
           <tr>
             <th class="th">Data</th><th class="th">Tipo</th><th class="th">Item</th>
-            <th class="th">Motorista</th><th class="th">Placa</th><th class="th">Qtd</th><th class="th">Obs</th>
+            <th class="th">Motorista</th><th class="th">Placa</th><th class="th">Qtd</th><th class="th">Obs</th><th class="th w-10"></th>
           </tr>
         </thead>
         <tbody>
           <tr class="trow" v-for="m in movements" :key="m.id">
-            <td class="td text-xs">{{ m.mov_date }}</td>
+            <td class="td text-xs">{{ fmtDate(m.mov_date) }}</td>
             <td class="td">
               <span class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold" :class="m.type === 'entrada' ? 'bg-green-100 text-green-600' : 'bg-orange-50 text-orange-600'">
                 {{ m.type === 'entrada' ? '↓ Entrada' : '↑ Saída' }}
@@ -276,6 +309,15 @@ onMounted(() => {
             </td>
             <td class="td font-bold text-stone-800">{{ m.qty }}</td>
             <td class="td text-xs text-slate-500 max-w-[180px] truncate">{{ m.obs || '—' }}</td>
+            <td class="td text-center">
+              <button
+                @click.stop="deleteMovement(m)"
+                title="Excluir"
+                class="text-red-600 bg-red-50 hover:bg-red-100 p-1.5 rounded-md transition-colors inline-flex"
+              >
+                <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>

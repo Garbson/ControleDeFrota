@@ -83,5 +83,30 @@ export function usePayable() {
     return res
   }
 
-  return { items, summary, loading, fetchAll, fetchSummary, create, markPaid, update, remove, uploadReceipt, deleteReceipt }
+  async function uploadInvoice(id, file) {
+    const formData = new FormData()
+    formData.append('invoice', file)
+    const res = await fetch(`${BASE_URL}/payable/${id}/invoice`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getAccessToken()}` },
+      body: formData,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Erro no upload' }))
+      throw new Error(err.error || 'Erro no upload')
+    }
+    const data = await res.json()
+    const item = items.value.find(i => i.id === id)
+    if (item) item.invoice_url = data.invoice_url
+    return data
+  }
+
+  async function deleteInvoice(id) {
+    const res = await api.delete(`/payable/${id}/invoice`)
+    const item = items.value.find(i => i.id === id)
+    if (item) item.invoice_url = null
+    return res
+  }
+
+  return { items, summary, loading, fetchAll, fetchSummary, create, markPaid, update, remove, uploadReceipt, deleteReceipt, uploadInvoice, deleteInvoice }
 }

@@ -2,11 +2,26 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { useDashboard } from '../../composables/useDashboard'
+import { useStock } from '../../composables/useStock'
 import KPICard from '../ui/KPICard.vue'
 
 Chart.register(...registerables)
 
+const props = defineProps({ showToast: Function })
+
 const { kpis, topDrivers, recentMovements, loading, fetchDashboard } = useDashboard()
+const { removeMovement } = useStock()
+
+async function deleteMovement(m) {
+  if (!confirm(`Excluir movimentação de ${m.qty} un de "${m.item_name || 'item'}"?`)) return
+  try {
+    await removeMovement(m.id)
+    await fetchDashboard()
+    props.showToast?.('Movimentação excluída')
+  } catch {
+    props.showToast?.('❌ Erro ao excluir movimentação')
+  }
+}
 
 const chartOrder = ref('desc')
 const mvFilter = ref('all')
@@ -19,6 +34,10 @@ const filteredMovements = computed(() => {
 })
 
 const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+function fmtDate(raw) {
+  if (!raw) return '—'
+  return new Date(raw).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+}
 
 function chartData() {
   let list = [...topDrivers.value].filter(d => d.tires > 0)
@@ -203,12 +222,12 @@ watch(topDrivers, () => nextTick(initChart))
           <thead>
             <tr>
               <th class="th">Data</th><th class="th">Tipo</th><th class="th">Motorista</th>
-              <th class="th">Item</th><th class="th">Qtd</th><th class="th">Valor</th><th class="th">Status</th>
+              <th class="th">Item</th><th class="th">Qtd</th><th class="th">Valor</th><th class="th">Status</th><th class="th w-10"></th>
             </tr>
           </thead>
           <tbody>
             <tr class="trow" v-for="m in filteredMovements" :key="m.id">
-              <td class="td font-medium whitespace-nowrap">{{ m.mov_date }}</td>
+              <td class="td font-medium whitespace-nowrap">{{ fmtDate(m.mov_date) }}</td>
               <td class="td">
                 <span class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold"
                   :style="m.type === 'entrada' ? 'background:rgba(16,185,129,0.12);color:#059669' : 'background:rgba(249,115,22,0.12);color:#c2410c'">
@@ -226,6 +245,15 @@ watch(topDrivers, () => nextTick(initChart))
               </td>
               <td class="td">
                 <span class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold" style="background:rgba(37,99,235,0.10);color:#1d4ed8">Registrado</span>
+              </td>
+              <td class="td text-center">
+                <button
+                  @click.stop="deleteMovement(m)"
+                  title="Excluir"
+                  class="text-red-600 bg-red-50 hover:bg-red-100 p-1.5 rounded-md transition-colors inline-flex"
+                >
+                  <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                </button>
               </td>
             </tr>
           </tbody>
