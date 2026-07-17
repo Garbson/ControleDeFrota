@@ -21,6 +21,8 @@ const pageInfo = computed(() => {
     analytics:  { title: "Análise de Gastos",  subtitle: "Análise comparativa de custos e insights de frota" },
     nfs:        { title: "Notas Fiscais",      subtitle: "Histórico de compras e notas fiscais de entrada" },
     report:     { title: "Relatório Geral",    subtitle: "Consolidado financeiro da frota" },
+    users:      { title: "Usuários & Acessos", subtitle: "Gerenciamento de acessos ao sistema" },
+    audit:      { title: "Histórico de Auditoria", subtitle: "Rastreabilidade das alterações realizadas" },
   };
   return map[props.currentView] || { title: "ControleFrota", subtitle: "" };
 });

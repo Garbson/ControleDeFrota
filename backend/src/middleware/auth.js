@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken')
+const { prepareAudit } = require('./audit')
 
-function authenticate(req, res, next) {
+async function authenticate(req, res, next) {
   const header = req.headers.authorization
   if (!header || !header.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Token não informado' })
@@ -8,16 +9,19 @@ function authenticate(req, res, next) {
 
   const token = header.split(' ')[1]
 
+  let payload
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET)
-    req.user = payload
-    next()
+    payload = jwt.verify(token, process.env.JWT_SECRET)
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
       return res.status(401).json({ error: 'Token expirado', code: 'TOKEN_EXPIRED' })
     }
     return res.status(401).json({ error: 'Token inválido' })
   }
+
+  req.user = payload
+  await prepareAudit(req, res).catch(err => console.error('[audit:prepare]', err.message))
+  next()
 }
 
 function requireAdmin(req, res, next) {

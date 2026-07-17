@@ -46,7 +46,10 @@ const menuSections = computed(() => [
       { id: 'report',    label: 'Relatório Geral',   icon: 'report' },
     ],
   },
-  ...(isAdmin.value ? [{ title: 'Administração', items: [{ id: 'users', label: 'Usuários & Acessos', icon: 'users' }] }] : []),
+  ...(isAdmin.value ? [{ title: 'Administração', items: [
+    { id: 'users', label: 'Usuários & Acessos', icon: 'users' },
+    { id: 'audit', label: 'Histórico de Auditoria', icon: 'audit' },
+  ] }] : []),
 ])
 
 const userInitial = computed(() => (user.value?.name || 'A')[0].toUpperCase())
@@ -91,6 +94,7 @@ onMounted(() => loadPending())
             <svg v-else-if="item.icon==='nfs'"       width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
             <svg v-else-if="item.icon==='report'"    width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
             <svg v-else-if="item.icon==='users'"     width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+            <svg v-else-if="item.icon==='audit'"     width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M13 3a9 9 0 1 0 8.95 10h-2.02A7 7 0 1 1 13 5v3l4-4-4-4v3zm-1 5v5l4.25 2.52.75-1.23-3.5-2.08V8H12z"/></svg>
           </span>
           <span class="label">{{ item.label }}</span>
           <span v-if="item.badge" class="badge">{{ item.badge }}</span>

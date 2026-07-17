@@ -327,8 +327,9 @@ onMounted(async () => {
 
             <!-- Placa -->
             <div>
-              <label class="block text-xs font-bold text-stone-600 mb-1.5">Placa do Veículo *</label>
+                <label for="fine-vehicle" class="block text-xs font-bold text-stone-600 mb-1.5">Placa do Veículo *</label>
               <select
+                id="fine-vehicle"
                 v-model="form.vehicle_plate"
                 class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               >
@@ -349,8 +350,9 @@ onMounted(async () => {
                 />
               </div>
               <div>
-                <label class="block text-xs font-bold text-stone-600 mb-1.5">Vencimento</label>
+                <label for="fine-due-date" class="block text-xs font-bold text-stone-600 mb-1.5">Vencimento</label>
                 <input
+                  id="fine-due-date"
                   v-model="form.due_date"
                   type="date"
                   class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -361,8 +363,9 @@ onMounted(async () => {
             <!-- Valor + Categoria -->
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-bold text-stone-600 mb-1.5">Valor (R$) *</label>
+                <label for="fine-value" class="block text-xs font-bold text-stone-600 mb-1.5">Valor (R$) *</label>
                 <input
+                  id="fine-value"
                   v-model="form.value"
                   type="number"
                   step="0.01"
@@ -384,8 +387,9 @@ onMounted(async () => {
 
             <!-- Descrição -->
             <div>
-              <label class="block text-xs font-bold text-stone-600 mb-1.5">Descrição / Código da Multa</label>
+              <label for="fine-description" class="block text-xs font-bold text-stone-600 mb-1.5">Descrição / Código da Multa</label>
               <input
+                id="fine-description"
                 v-model="form.description"
                 type="text"
                 placeholder="Ex: 55411 - Velocidade 20km/h acima"

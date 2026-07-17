@@ -1,26 +1,29 @@
 <script setup>
-import { onMounted, provide, ref } from "vue";
+import { defineAsyncComponent, onMounted, provide, ref } from "vue";
 import AppSidebar from "./components/layout/AppSidebar.vue";
 import AppTopbar from "./components/layout/AppTopbar.vue";
 import Toast from "./components/ui/Toast.vue";
 import ConfirmDialog from "./components/ui/ConfirmDialog.vue";
-import AnalyticsView from "./components/views/AnalyticsView.vue";
-import DashboardView from "./components/views/DashboardView.vue";
-import DriversView from "./components/views/DriversView.vue";
-import ExpenseView from "./components/views/ExpenseView.vue";
-import FinesView from "./components/views/FinesView.vue";
-import FuelView from "./components/views/FuelView.vue";
-import NfsView from "./components/views/NfsView.vue";
-import PayableView from "./components/views/PayableView.vue";
-import ReceivableView from "./components/views/ReceivableView.vue";
-import ReportView from "./components/views/ReportView.vue";
-import StockView from "./components/views/StockView.vue";
-import SuppliersView from "./components/views/SuppliersView.vue";
-import TripsView from "./components/views/TripsView.vue";
-import UsersView from "./components/views/UsersView.vue";
-import VehiclesView from "./components/views/VehiclesView.vue";
 import { useAuth } from "./composables/useAuth";
 import LoginView from "./views/LoginView.vue";
+
+// Cada módulo operacional é carregado somente quando o usuário o abre.
+const AnalyticsView = defineAsyncComponent(() => import("./components/views/AnalyticsView.vue"));
+const AuditView = defineAsyncComponent(() => import("./components/views/AuditView.vue"));
+const DashboardView = defineAsyncComponent(() => import("./components/views/DashboardView.vue"));
+const DriversView = defineAsyncComponent(() => import("./components/views/DriversView.vue"));
+const ExpenseView = defineAsyncComponent(() => import("./components/views/ExpenseView.vue"));
+const FinesView = defineAsyncComponent(() => import("./components/views/FinesView.vue"));
+const FuelView = defineAsyncComponent(() => import("./components/views/FuelView.vue"));
+const NfsView = defineAsyncComponent(() => import("./components/views/NfsView.vue"));
+const PayableView = defineAsyncComponent(() => import("./components/views/PayableView.vue"));
+const ReceivableView = defineAsyncComponent(() => import("./components/views/ReceivableView.vue"));
+const ReportView = defineAsyncComponent(() => import("./components/views/ReportView.vue"));
+const StockView = defineAsyncComponent(() => import("./components/views/StockView.vue"));
+const SuppliersView = defineAsyncComponent(() => import("./components/views/SuppliersView.vue"));
+const TripsView = defineAsyncComponent(() => import("./components/views/TripsView.vue"));
+const UsersView = defineAsyncComponent(() => import("./components/views/UsersView.vue"));
+const VehiclesView = defineAsyncComponent(() => import("./components/views/VehiclesView.vue"));
 
 const { isAuthenticated, fetchMe, logout } = useAuth();
 
@@ -154,6 +157,7 @@ onMounted(async () => {
           v-else-if="currentView === 'users'"
           :show-toast="showToast"
         />
+        <AuditView v-else-if="currentView === 'audit'" />
       </div>
     </main>
     <Toast />

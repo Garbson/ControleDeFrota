@@ -8,6 +8,7 @@ const path = require('path')
 const rateLimit = require('express-rate-limit')
 
 const { testConnection } = require('./config/database')
+const { runMigrations } = require('./config/migrate')
 
 const authRoutes      = require('./routes/auth')
 const driversRoutes   = require('./routes/drivers')
@@ -21,6 +22,7 @@ const finesRoutes     = require('./routes/fines')
 const tripsRoutes     = require('./routes/trips')
 const usersRoutes      = require('./routes/users')
 const suppliersRoutes  = require('./routes/suppliers')
+const auditRoutes       = require('./routes/audit')
 
 const app = express()
 
@@ -73,6 +75,7 @@ app.use('/api/fines',      finesRoutes)
 app.use('/api/trips',      tripsRoutes)
 app.use('/api/users',      usersRoutes)
 app.use('/api/suppliers',  suppliersRoutes)
+app.use('/api/audit',      auditRoutes)
 
 // ── 404
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada' }))
@@ -94,6 +97,7 @@ const PORT = parseInt(process.env.PORT) || 4000
 
 if (process.env.NODE_ENV !== 'test') {
   async function start() {
+    await runMigrations()
     await testConnection()
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 API rodando na porta ${PORT} [${process.env.NODE_ENV || 'development'}]`)

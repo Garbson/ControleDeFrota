@@ -149,6 +149,10 @@ router.patch('/:id/pay', async (req, res) => {
       "UPDATE accounts_payable SET status = 'pago', paid_date = ? WHERE id = ?",
       [paid_date, req.params.id]
     )
+    await query(
+      "UPDATE fines SET status = 'pago', paid_date = ? WHERE account_payable_id = ?",
+      [paid_date, req.params.id]
+    )
     res.json({ message: 'Conta marcada como paga' })
   } catch (err) {
     res.status(500).json({ error: 'Erro ao atualizar conta' })
@@ -168,6 +172,13 @@ router.put('/:id', async (req, res) => {
       [document || null, description || null, supplier_id || null, resolvedFree, driver_id || null,
        vehicle_id || null, trip_id || null, category, value, issue_date || null, due_date, status, obs || null, req.params.id]
     )
+    if (status === 'pago') {
+      await query("UPDATE fines SET status='pago', paid_date=COALESCE(paid_date, CURDATE()) WHERE account_payable_id=?", [req.params.id])
+    } else if (status === 'cancelado') {
+      await query("UPDATE fines SET status='recurso', paid_date=NULL WHERE account_payable_id=?", [req.params.id])
+    } else if (status === 'pendente' || status === 'vencido') {
+      await query("UPDATE fines SET status='pendente', paid_date=NULL WHERE account_payable_id=?", [req.params.id])
+    }
     res.json({ message: 'Conta atualizada' })
   } catch (err) {
     console.error('[PUT /payable]', err.message, err.stack)
@@ -178,6 +189,10 @@ router.put('/:id', async (req, res) => {
 // DELETE /payable/:id
 router.delete('/:id', async (req, res) => {
   try {
+    const [linkedFine] = await query('SELECT id FROM fines WHERE account_payable_id = ?', [req.params.id])
+    if (linkedFine) {
+      return res.status(409).json({ error: 'Esta conta foi gerada por uma multa. Remova a multa pela tela de Multas.' })
+    }
     await query('DELETE FROM accounts_payable WHERE id = ?', [req.params.id])
     res.json({ message: 'Conta removida' })
   } catch (err) {

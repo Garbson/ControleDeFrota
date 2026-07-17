@@ -80,13 +80,28 @@ describe('Payable Routes', () => {
 
   describe('PATCH /api/payable/:id/pay', () => {
     it('deve marcar conta como paga', async () => {
-      query.mockResolvedValueOnce({ affectedRows: 1 })
+      query
+        .mockResolvedValueOnce({ affectedRows: 1 })
+        .mockResolvedValueOnce({ affectedRows: 1 })
       const res = await request(app)
         .patch('/api/payable/1/pay')
         .set('Authorization', `Bearer ${token}`)
         .send({ paid_date: '2026-06-09' })
       expect(res.status).toBe(200)
       expect(res.body.message).toContain('paga')
+      expect(query.mock.calls[1][0]).toContain("fines SET status = 'pago'")
+    })
+  })
+
+  describe('DELETE /api/payable/:id', () => {
+    it('impede excluir isoladamente uma conta vinculada a multa', async () => {
+      query.mockResolvedValueOnce([{ id: 77 }])
+      const res = await request(app)
+        .delete('/api/payable/88')
+        .set('Authorization', `Bearer ${token}`)
+
+      expect(res.status).toBe(409)
+      expect(res.body.error).toContain('tela de Multas')
     })
   })
 })

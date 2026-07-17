@@ -208,10 +208,10 @@ const cpCatFilter = ref('all')
 const cpDriverFilter = ref('')
 const cpSort = ref('vencimento')
 
-const catLabel = { manutencao: 'Manutenção', pecas: 'Peças', pneus: 'Pneus (serv.)', administrativo: 'Administrativo' }
-const catColor = { manutencao: '#f59e0b', pecas: '#2563eb', pneus: '#10b981', administrativo: '#7c3aed' }
-const catBg = { manutencao: '#fff7ed', pecas: '#eff6ff', pneus: '#f0fdf4', administrativo: '#f5f3ff' }
-const catText = { manutencao: '#c2410c', pecas: '#1d4ed8', pneus: '#15803d', administrativo: '#6d28d9' }
+const catLabel = { manutencao: 'Manutenção', pecas: 'Peças', pneus: 'Pneus (serv.)', administrativo: 'Administrativo', multas: 'Multas' }
+const catColor = { manutencao: '#f59e0b', pecas: '#2563eb', pneus: '#10b981', administrativo: '#7c3aed', multas: '#dc2626' }
+const catBg = { manutencao: '#fff7ed', pecas: '#eff6ff', pneus: '#f0fdf4', administrativo: '#f5f3ff', multas: '#fef2f2' }
+const catText = { manutencao: '#c2410c', pecas: '#1d4ed8', pneus: '#15803d', administrativo: '#6d28d9', multas: '#b91c1c' }
 
 const filteredCP = computed(() => {
   let list = [...items.value]
@@ -329,6 +329,7 @@ onMounted(() => {
           <button class="sbtn" :class="{ on: cpCatFilter === 'pecas' }" @click="cpCatFilter = 'pecas'">Peças</button>
           <button class="sbtn" :class="{ on: cpCatFilter === 'pneus' }" @click="cpCatFilter = 'pneus'">Pneus</button>
           <button class="sbtn" :class="{ on: cpCatFilter === 'administrativo' }" @click="cpCatFilter = 'administrativo'">Administrativo</button>
+          <button class="sbtn" :class="{ on: cpCatFilter === 'multas' }" @click="cpCatFilter = 'multas'">Multas</button>
         </div>
         <!-- linha 2: motorista + ordenação -->
         <div class="flex gap-2 items-center flex-wrap">
@@ -491,6 +492,7 @@ onMounted(() => {
                 <option value="pecas">Peças</option>
                 <option value="pneus">Pneus (serv.)</option>
                 <option value="administrativo">Administrativo</option>
+                <option value="multas">Multas</option>
               </select>
             </div>
             <!-- Placa -->

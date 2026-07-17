@@ -36,4 +36,23 @@ async function testConnection() {
   }
 }
 
-module.exports = { getPool, query, testConnection }
+async function transaction(callback) {
+  const connection = await getPool().getConnection()
+  try {
+    await connection.beginTransaction()
+    const tx = async (sql, params = []) => {
+      const [rows] = await connection.execute(sql, params)
+      return rows
+    }
+    const result = await callback(tx)
+    await connection.commit()
+    return result
+  } catch (err) {
+    await connection.rollback()
+    throw err
+  } finally {
+    connection.release()
+  }
+}
+
+module.exports = { getPool, query, testConnection, transaction }
