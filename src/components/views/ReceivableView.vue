@@ -102,6 +102,7 @@ async function handleDeleteReceipt(item) {
 
 function receiptUrl(item) {
   if (!item?.receipt_url) return null
+  if (item.receipt_access_url) return item.receipt_access_url
   const base = import.meta.env.VITE_API_URL || '/api'
   return item.receipt_url.startsWith('http') ? item.receipt_url : base.replace('/api', '') + item.receipt_url
 }

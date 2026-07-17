@@ -61,14 +61,20 @@ export function usePayable() {
     const data = await api.upload(`/payable/${id}/receipt`, formData)
     // Atualiza o item na lista local
     const item = items.value.find(i => i.id === id)
-    if (item) item.receipt_url = data.receipt_url
+    if (item) {
+      item.receipt_url = data.receipt_url
+      item.receipt_access_url = data.receipt_access_url
+    }
     return data
   }
 
   async function deleteReceipt(id) {
     const res = await api.delete(`/payable/${id}/receipt`)
     const item = items.value.find(i => i.id === id)
-    if (item) item.receipt_url = null
+    if (item) {
+      item.receipt_url = null
+      item.receipt_access_url = null
+    }
     return res
   }
 
@@ -78,14 +84,20 @@ export function usePayable() {
     formData.append('invoice', optimizedFile)
     const data = await api.upload(`/payable/${id}/invoice`, formData)
     const item = items.value.find(i => i.id === id)
-    if (item) item.invoice_url = data.invoice_url
+    if (item) {
+      item.invoice_url = data.invoice_url
+      item.invoice_access_url = data.invoice_access_url
+    }
     return data
   }
 
   async function deleteInvoice(id) {
     const res = await api.delete(`/payable/${id}/invoice`)
     const item = items.value.find(i => i.id === id)
-    if (item) item.invoice_url = null
+    if (item) {
+      item.invoice_url = null
+      item.invoice_access_url = null
+    }
     return res
   }
 

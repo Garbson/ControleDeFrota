@@ -5,6 +5,8 @@ const path = require('path')
 const fs = require('fs')
 const { query } = require('../config/database')
 const { authenticate } = require('../middleware/auth')
+const { attachAccessUrls } = require('../services/r2Storage')
+const { saveUploadedFile, removeStoredFile, storedFileResponse } = require('../utils/storedFile')
 
 router.use(authenticate)
 
@@ -45,7 +47,7 @@ router.get('/', async (req, res) => {
     if (status) { sql += ' AND ar.status = ?'; params.push(status) }
     sql += ' ORDER BY ar.due_date ASC'
     const rows = await query(sql, params)
-    res.json(rows)
+    res.json(await attachAccessUrls(rows, ['receipt_url']))
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar contas a receber' })
   }
@@ -133,21 +135,20 @@ router.post('/:id/receipt', upload.single('receipt'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nenhum arquivo enviado' })
   }
-  const receiptUrl = `/uploads/receipts/${req.file.filename}`
-
+  const localReference = `/uploads/receipts/${req.file.filename}`
+  let storedReference = null
   try {
-    // Remove comprovante antigo se existir
     const [current] = await query('SELECT receipt_url FROM accounts_receivable WHERE id = ?', [req.params.id])
-    if (current?.receipt_url) {
-      const oldPath = path.join(__dirname, '..', '..', current.receipt_url)
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath)
+    storedReference = await saveUploadedFile(req.file, 'receivable/receipts', localReference)
+    await query('UPDATE accounts_receivable SET receipt_url = ? WHERE id = ?', [storedReference, req.params.id])
+    if (current?.receipt_url && current.receipt_url !== storedReference) {
+      await removeStoredFile(current.receipt_url).catch(err => console.error('[receivable-receipt:cleanup]', err.message))
     }
-
-    await query('UPDATE accounts_receivable SET receipt_url = ? WHERE id = ?', [receiptUrl, req.params.id])
-    res.json({ receipt_url: receiptUrl, message: 'Comprovante enviado' })
+    const file = await storedFileResponse(storedReference)
+    res.json({ receipt_url: file.reference, receipt_access_url: file.access_url, message: 'Comprovante enviado' })
   } catch (err) {
-    // Remove arquivo se falhou ao atualizar banco
-    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
+    await removeStoredFile(storedReference || localReference).catch(() => {})
+    console.error('[receivable-receipt:upload]', err.message)
     res.status(500).json({ error: 'Erro ao salvar comprovante' })
   }
 })
@@ -156,11 +157,8 @@ router.post('/:id/receipt', upload.single('receipt'), async (req, res) => {
 router.delete('/:id/receipt', async (req, res) => {
   try {
     const [current] = await query('SELECT receipt_url FROM accounts_receivable WHERE id = ?', [req.params.id])
-    if (current?.receipt_url) {
-      const filePath = path.join(__dirname, '..', '..', current.receipt_url)
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
-    }
     await query('UPDATE accounts_receivable SET receipt_url = NULL WHERE id = ?', [req.params.id])
+    await removeStoredFile(current?.receipt_url).catch(err => console.error('[receivable-receipt:delete]', err.message))
     res.json({ message: 'Comprovante removido' })
   } catch (err) {
     res.status(500).json({ error: 'Erro ao remover comprovante' })

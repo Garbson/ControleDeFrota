@@ -58,14 +58,20 @@ export function useReceivable() {
     formData.append('receipt', optimizedFile)
     const data = await api.upload(`/receivable/${id}/receipt`, formData)
     const item = items.value.find(i => i.id === id)
-    if (item) item.receipt_url = data.receipt_url
+    if (item) {
+      item.receipt_url = data.receipt_url
+      item.receipt_access_url = data.receipt_access_url
+    }
     return data
   }
 
   async function deleteReceipt(id) {
     const res = await api.delete(`/receivable/${id}/receipt`)
     const item = items.value.find(i => i.id === id)
-    if (item) item.receipt_url = null
+    if (item) {
+      item.receipt_url = null
+      item.receipt_access_url = null
+    }
     return res
   }
 

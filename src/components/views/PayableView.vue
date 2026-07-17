@@ -106,6 +106,7 @@ async function handleDeleteReceipt(item) {
 
 function receiptUrl(item) {
   if (!item?.receipt_url) return null
+  if (item.receipt_access_url) return item.receipt_access_url
   const base = import.meta.env.VITE_API_URL || '/api'
   // receipt_url já vem como /uploads/receipts/...
   return item.receipt_url.startsWith('http') ? item.receipt_url : base.replace('/api', '') + item.receipt_url
@@ -153,6 +154,7 @@ async function handleDeleteInvoice(item) {
 
 function invoiceUrl(item) {
   if (!item?.invoice_url) return null
+  if (item.invoice_access_url) return item.invoice_access_url
   const base = import.meta.env.VITE_API_URL || '/api'
   return item.invoice_url.startsWith('http') ? item.invoice_url : base.replace('/api', '') + item.invoice_url
 }

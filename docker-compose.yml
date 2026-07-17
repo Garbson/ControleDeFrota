@@ -51,6 +51,10 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       JWT_REFRESH_EXPIRES_IN: 7d
       FRONTEND_URL: https://controlefrota.zlabs.com.br
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_FILES_BUCKET: ${R2_FILES_BUCKET:-controlefrota-files}
     depends_on:
       controlefrota-mysql:
         condition: service_healthy
@@ -61,6 +65,39 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+
+  # ── Backup diário para bucket privado Cloudflare R2
+  controlefrota-backup:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: controlefrota-backup
+    restart: unless-stopped
+    command: ["/app/scripts/backup-loop.sh"]
+    volumes:
+      - controlefrota-uploads:/app/uploads:ro
+    environment:
+      NODE_ENV: production
+      DB_HOST: controlefrota-mysql
+      DB_PORT: 3306
+      DB_NAME: controlefrota
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_FILES_BUCKET: ${R2_FILES_BUCKET:-controlefrota-files}
+      R2_BACKUP_BUCKET: ${R2_BACKUP_BUCKET:-controlefrota-backups}
+      BACKUP_ENABLED: ${BACKUP_ENABLED:-false}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-35}
+      UPLOADS_PATH: /app/uploads
+      TZ: America/Sao_Paulo
+    depends_on:
+      controlefrota-mysql:
+        condition: service_healthy
+    networks:
+      - controlefrota-net
 
   # ── Frontend Vue (nginx)
   controlefrota-web:

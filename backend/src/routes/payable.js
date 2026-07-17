@@ -6,6 +6,8 @@ const fs = require('fs')
 const { query } = require('../config/database')
 const { authenticate } = require('../middleware/auth')
 const { findActiveTrip } = require('../utils/findActiveTrip')
+const { attachAccessUrls } = require('../services/r2Storage')
+const { saveUploadedFile, removeStoredFile, storedFileResponse } = require('../utils/storedFile')
 
 router.use(authenticate)
 
@@ -80,7 +82,7 @@ router.get('/', async (req, res) => {
     sql += ' ORDER BY ap.due_date ASC'
 
     const rows = await query(sql, params)
-    res.json(rows)
+    res.json(await attachAccessUrls(rows, ['receipt_url', 'invoice_url']))
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Erro ao buscar contas a pagar' })
@@ -205,21 +207,20 @@ router.post('/:id/receipt', upload.single('receipt'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nenhum arquivo enviado' })
   }
-  const receiptUrl = `/uploads/receipts/${req.file.filename}`
-
+  const localReference = `/uploads/receipts/${req.file.filename}`
+  let storedReference = null
   try {
-    // Remove comprovante antigo se existir
     const [current] = await query('SELECT receipt_url FROM accounts_payable WHERE id = ?', [req.params.id])
-    if (current?.receipt_url) {
-      const oldPath = path.join(__dirname, '..', '..', current.receipt_url)
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath)
+    storedReference = await saveUploadedFile(req.file, 'payable/receipts', localReference)
+    await query('UPDATE accounts_payable SET receipt_url = ? WHERE id = ?', [storedReference, req.params.id])
+    if (current?.receipt_url && current.receipt_url !== storedReference) {
+      await removeStoredFile(current.receipt_url).catch(err => console.error('[receipt:cleanup]', err.message))
     }
-
-    await query('UPDATE accounts_payable SET receipt_url = ? WHERE id = ?', [receiptUrl, req.params.id])
-    res.json({ receipt_url: receiptUrl, message: 'Comprovante enviado' })
+    const file = await storedFileResponse(storedReference)
+    res.json({ receipt_url: file.reference, receipt_access_url: file.access_url, message: 'Comprovante enviado' })
   } catch (err) {
-    // Remove arquivo se falhou ao atualizar banco
-    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
+    await removeStoredFile(storedReference || localReference).catch(() => {})
+    console.error('[receipt:upload]', err.message)
     res.status(500).json({ error: 'Erro ao salvar comprovante' })
   }
 })
@@ -228,11 +229,8 @@ router.post('/:id/receipt', upload.single('receipt'), async (req, res) => {
 router.delete('/:id/receipt', async (req, res) => {
   try {
     const [current] = await query('SELECT receipt_url FROM accounts_payable WHERE id = ?', [req.params.id])
-    if (current?.receipt_url) {
-      const filePath = path.join(__dirname, '..', '..', current.receipt_url)
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
-    }
     await query('UPDATE accounts_payable SET receipt_url = NULL WHERE id = ?', [req.params.id])
+    await removeStoredFile(current?.receipt_url).catch(err => console.error('[receipt:delete]', err.message))
     res.json({ message: 'Comprovante removido' })
   } catch (err) {
     res.status(500).json({ error: 'Erro ao remover comprovante' })
@@ -244,17 +242,20 @@ router.post('/:id/invoice', invoiceUpload.single('invoice'), async (req, res) =>
   if (!req.file) {
     return res.status(400).json({ error: 'Nenhum arquivo enviado' })
   }
-  const invoiceUrl = `/uploads/invoices/${req.file.filename}`
+  const localReference = `/uploads/invoices/${req.file.filename}`
+  let storedReference = null
   try {
     const [current] = await query('SELECT invoice_url FROM accounts_payable WHERE id = ?', [req.params.id])
-    if (current?.invoice_url) {
-      const oldPath = path.join(__dirname, '..', '..', current.invoice_url)
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath)
+    storedReference = await saveUploadedFile(req.file, 'payable/invoices', localReference)
+    await query('UPDATE accounts_payable SET invoice_url = ? WHERE id = ?', [storedReference, req.params.id])
+    if (current?.invoice_url && current.invoice_url !== storedReference) {
+      await removeStoredFile(current.invoice_url).catch(err => console.error('[invoice:cleanup]', err.message))
     }
-    await query('UPDATE accounts_payable SET invoice_url = ? WHERE id = ?', [invoiceUrl, req.params.id])
-    res.json({ invoice_url: invoiceUrl, message: 'Nota fiscal enviada' })
+    const file = await storedFileResponse(storedReference)
+    res.json({ invoice_url: file.reference, invoice_access_url: file.access_url, message: 'Nota fiscal enviada' })
   } catch (err) {
-    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
+    await removeStoredFile(storedReference || localReference).catch(() => {})
+    console.error('[invoice:upload]', err.message)
     res.status(500).json({ error: 'Erro ao salvar nota fiscal' })
   }
 })
@@ -263,11 +264,8 @@ router.post('/:id/invoice', invoiceUpload.single('invoice'), async (req, res) =>
 router.delete('/:id/invoice', async (req, res) => {
   try {
     const [current] = await query('SELECT invoice_url FROM accounts_payable WHERE id = ?', [req.params.id])
-    if (current?.invoice_url) {
-      const filePath = path.join(__dirname, '..', '..', current.invoice_url)
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
-    }
     await query('UPDATE accounts_payable SET invoice_url = NULL WHERE id = ?', [req.params.id])
+    await removeStoredFile(current?.invoice_url).catch(err => console.error('[invoice:delete]', err.message))
     res.json({ message: 'Nota fiscal removida' })
   } catch (err) {
     res.status(500).json({ error: 'Erro ao remover nota fiscal' })
