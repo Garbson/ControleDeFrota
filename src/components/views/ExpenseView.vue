@@ -166,7 +166,8 @@ const formSupplierName = computed(() => {
   return suppliers.value.find(s => s.id == form.value.supplier_id)?.name || ''
 })
 
-const formValid = computed(() => form.value.driver_id && form.value.type && Number(form.value.value) > 0 && form.value.date && (!parcelar.value || totalDiff.value < 0.01))
+const supplierValid = computed(() => Boolean(form.value.supplier_id || supplierSearch.value.trim().length >= 2))
+const formValid = computed(() => form.value.driver_id && form.value.type && Number(form.value.value) > 0 && form.value.date && supplierValid.value && (!parcelar.value || totalDiff.value < 0.01))
 
 const totalParcelas = computed(() => customParcelas.value.reduce((s, p) => s + Number(p.value || 0), 0))
 const totalDiff = computed(() => parcelar.value && form.value.value ? Math.abs(totalParcelas.value - Number(form.value.value)) : 0)
@@ -358,13 +359,14 @@ onMounted(() => {
           </div>
 
           <div class="relative">
-            <label class="flabel">Fornecedor <span class="font-normal normal-case text-slate-400">(busca por nome ou CNPJ)</span></label>
+            <label class="flabel">Fornecedor * <span class="font-normal normal-case text-slate-400">(busca por nome ou CNPJ)</span></label>
             <div class="relative">
               <input
                 v-model="supplierSearch"
                 type="text"
                 placeholder="Digite nome ou CNPJ do fornecedor..."
                 class="finput pr-8"
+                :class="supplierSearch && !supplierValid ? '!border-red-400' : ''"
                 @focus="showSupplierDropdown = true"
                 @blur="blurSupplier"
                 @input="showSupplierDropdown = true; form.supplier_id = ''"
@@ -379,6 +381,7 @@ onMounted(() => {
                 <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
               </button>
             </div>
+            <p v-if="!supplierValid" class="mt-1 text-[10px] text-amber-600">Selecione um fornecedor ou informe um nome com pelo menos 2 caracteres.</p>
             <!-- Dropdown de sugestões -->
             <div
               v-if="showSupplierDropdown && (supplierFiltered.length || showCreateOption)"
