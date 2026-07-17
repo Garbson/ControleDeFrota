@@ -1,6 +1,7 @@
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useAuth } from "../../composables/useAuth";
+import QuickLaunchDialog from "../ui/QuickLaunchDialog.vue";
 
 const props = defineProps({ currentView: String });
 const emit = defineEmits(["navigate", "logout"]);
@@ -28,6 +29,7 @@ const pageInfo = computed(() => {
 });
 
 const today = new Date().toLocaleDateString("pt-BR");
+const quickOpen = ref(false);
 
 async function handleLogout() {
   await logout();
@@ -58,7 +60,7 @@ async function handleLogout() {
       </div>
 
       <!-- Novo Lançamento -->
-      <button @click="emit('navigate', 'expense')"
+      <button @click="quickOpen = true"
         class="flex items-center gap-1.5 rounded-lg py-1.5 px-3.5 text-xs text-white font-semibold cursor-pointer border-0 transition-opacity hover:opacity-90 active:opacity-75"
         style="background:linear-gradient(135deg,#2563eb,#1d4ed8);box-shadow:0 4px 14px rgba(37,99,235,0.35)">
         <svg width="13" height="13" fill="white" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
@@ -79,5 +81,6 @@ async function handleLogout() {
         </button>
       </div>
     </div>
+    <QuickLaunchDialog :open="quickOpen" @close="quickOpen = false" @navigate="emit('navigate', $event)" />
   </div>
 </template>

@@ -9,8 +9,9 @@ import KPICard from '../ui/KPICard.vue'
 Chart.register(...registerables)
 
 const props = defineProps({ showToast: Function })
+const emit = defineEmits(['navigate'])
 
-const { kpis, topDrivers, recentMovements, loading, fetchDashboard } = useDashboard()
+const { kpis, topDrivers, recentMovements, pendingActions, loading, fetchDashboard } = useDashboard()
 const { removeMovement } = useStock()
 const { confirmAction } = useConfirm()
 
@@ -118,8 +119,10 @@ watch(topDrivers, () => nextTick(initChart))
 <template>
   <div>
     <!-- Loading -->
-    <div v-if="loading" class="flex items-center justify-center py-20 text-slate-400 text-sm">
-      Carregando dados...
+    <div v-if="loading" class="space-y-4" aria-label="Carregando painel">
+      <div class="grid grid-cols-4 gap-3.5"><div v-for="i in 4" :key="i" class="skeleton h-[118px] rounded-xl" /></div>
+      <div class="grid grid-cols-3 gap-3.5"><div v-for="i in 3" :key="i" class="skeleton h-[92px] rounded-xl" /></div>
+      <div class="skeleton h-[300px] rounded-xl" />
     </div>
 
     <template v-else>
@@ -158,6 +161,18 @@ watch(topDrivers, () => nextTick(initChart))
           icon="💰"
         />
       </div>
+
+      <section class="mb-5" aria-labelledby="pending-title">
+        <div class="mb-2.5 flex items-end justify-between">
+          <div><h2 id="pending-title" class="m-0 text-sm font-extrabold text-stone-800">Central de pendências</h2><p class="m-0 mt-0.5 text-[11px] text-stone-400">Prioridades que precisam de atenção</p></div>
+        </div>
+        <div class="grid grid-cols-4 gap-3.5">
+          <button class="action-card border-red-200 bg-red-50/70" @click="emit('navigate', 'payable')"><span class="action-icon bg-red-100 text-red-700">!</span><span><strong>{{ pendingActions.overduePayables }} vencida{{ pendingActions.overduePayables === 1 ? '' : 's' }}</strong><small>R$ {{ fmt(pendingActions.overdueValue) }} em atraso</small></span><b>→</b></button>
+          <button class="action-card border-amber-200 bg-amber-50/70" @click="emit('navigate', 'payable')"><span class="action-icon bg-amber-100 text-amber-700">7d</span><span><strong>{{ pendingActions.dueSoonPayables }} vencendo</strong><small>Nos próximos sete dias</small></span><b>→</b></button>
+          <button class="action-card border-violet-200 bg-violet-50/70" @click="emit('navigate', 'payable')"><span class="action-icon bg-violet-100 text-violet-700">NF</span><span><strong>{{ pendingActions.missingInvoices }} sem nota</strong><small>Contas pendentes sem anexo</small></span><b>→</b></button>
+          <button class="action-card border-orange-200 bg-orange-50/70" @click="emit('navigate', 'fines')"><span class="action-icon bg-orange-100 text-orange-700">⚠</span><span><strong>{{ pendingActions.pendingFines }} multa{{ pendingActions.pendingFines === 1 ? '' : 's' }}</strong><small>R$ {{ fmt(pendingActions.pendingFinesValue) }} pendentes</small></span><b>→</b></button>
+        </div>
+      </section>
 
       <!-- Chart + Ranking -->
       <div class="grid grid-cols-[1fr_340px] gap-3.5 mb-5">

@@ -14,6 +14,7 @@ const kpis = ref({
 })
 const topDrivers = ref([])
 const recentMovements = ref([])
+const pendingActions = ref({ overduePayables: 0, overdueValue: 0, dueSoonPayables: 0, missingInvoices: 0, pendingFines: 0, pendingFinesValue: 0 })
 const loading = ref(false)
 
 export function useDashboard() {
@@ -35,10 +36,11 @@ export function useDashboard() {
       }
       topDrivers.value = data.topDrivers ?? []
       recentMovements.value = data.recentMovements ?? []
+      pendingActions.value = { ...pendingActions.value, ...(data.pendingActions ?? {}) }
     } finally {
       loading.value = false
     }
   }
 
-  return { kpis, topDrivers, recentMovements, loading, fetchDashboard }
+  return { kpis, topDrivers, recentMovements, pendingActions, loading, fetchDashboard }
 }

@@ -109,6 +109,7 @@ onMounted(async () => {
         <DashboardView
           v-if="currentView === 'dashboard'"
           :show-toast="showToast"
+          @navigate="navigate"
         />
         <DriversView
           v-else-if="currentView === 'drivers'"

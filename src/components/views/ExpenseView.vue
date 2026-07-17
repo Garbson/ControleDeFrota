@@ -12,8 +12,10 @@ const { vehicles, fetchAll: fetchVehicles } = useVehicles()
 const { suppliers, fetchAll: fetchSuppliers, create: createSupplier } = useSuppliers()
 const { uploadInvoice } = usePayable()
 
-const form = ref({ driver_id: '', type: '', qty: 1, value: '', date: '', due_date: '', description: '', obs: '', plate: '', vehicle_id: '', supplier_id: '', supplier_name_free: null })
+const today = new Date().toISOString().split('T')[0]
+const form = ref({ driver_id: '', type: '', qty: 1, value: '', date: today, due_date: today, description: '', obs: '', plate: '', vehicle_id: '', supplier_id: '', supplier_name_free: null })
 const invoiceFile = ref(null)
+const invoicePreview = ref('')
 const invoiceInput = ref(null)
 const submitting = ref(false)
 
@@ -38,8 +40,18 @@ function onInvoiceSelected(event) {
     return
   }
 
+  if (invoicePreview.value) URL.revokeObjectURL(invoicePreview.value)
   invoiceFile.value = file
+  invoicePreview.value = isImageFile ? URL.createObjectURL(file) : ''
 }
+
+function clearInvoice() {
+  if (invoicePreview.value) URL.revokeObjectURL(invoicePreview.value)
+  invoicePreview.value = ''
+  invoiceFile.value = null
+}
+
+const fileSize = computed(() => invoiceFile.value ? `${(invoiceFile.value.size / 1024 / 1024).toFixed(2)} MB` : '')
 
 // ── Placa: auto-preenche com a placa do motorista selecionado
 const plateInput = ref('')
@@ -71,9 +83,10 @@ watch(() => form.value.driver_id, (newId) => {
 })
 
 function selectPlate(plate) {
-  plateInput.value = plate
-  form.value.plate = plate
-  const v = vehicles.value.find(v => v.plate === plate)
+  const normalized = String(plate || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 8)
+  plateInput.value = normalized
+  form.value.plate = normalized
+  const v = vehicles.value.find(v => v.plate === normalized)
   form.value.vehicle_id = v?.id || ''
 }
 
@@ -153,7 +166,7 @@ const formSupplierName = computed(() => {
   return suppliers.value.find(s => s.id == form.value.supplier_id)?.name || ''
 })
 
-const formValid = computed(() => form.value.driver_id && form.value.type && form.value.value && form.value.date)
+const formValid = computed(() => form.value.driver_id && form.value.type && Number(form.value.value) > 0 && form.value.date && (!parcelar.value || totalDiff.value < 0.01))
 
 const totalParcelas = computed(() => customParcelas.value.reduce((s, p) => s + Number(p.value || 0), 0))
 const totalDiff = computed(() => parcelar.value && form.value.value ? Math.abs(totalParcelas.value - Number(form.value.value)) : 0)
@@ -242,10 +255,10 @@ async function submitExpense() {
 }
 
 function resetForm() {
-  form.value = { driver_id: '', type: '', qty: 1, value: '', date: '', due_date: '', description: '', obs: '', plate: '', vehicle_id: '', supplier_id: '', supplier_name_free: null }
+  form.value = { driver_id: '', type: '', qty: 1, value: '', date: today, due_date: today, description: '', obs: '', plate: '', vehicle_id: '', supplier_id: '', supplier_name_free: null }
   plateInput.value = ''
   supplierSearch.value = ''
-  invoiceFile.value = null
+  clearInvoice()
   parcelar.value = false; numParcelas.value = 2; customParcelas.value = []
 }
 
@@ -314,7 +327,8 @@ onMounted(() => {
 
           <div>
             <label class="flabel">Valor Total (R$) *</label>
-            <input v-model="form.value" type="number" step="0.01" placeholder="0,00" class="finput" />
+            <input v-model="form.value" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="0,00" class="finput" :class="form.value && Number(form.value) <= 0 ? '!border-red-400' : ''" />
+            <p v-if="form.value && Number(form.value) <= 0" class="mt-1 text-[10px] text-red-500">Informe um valor maior que zero.</p>
           </div>
 
           <div>
@@ -413,13 +427,14 @@ onMounted(() => {
                 @click="selectInvoice"
               >
                 <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" class="flex-shrink-0"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm1 7V3.5L18.5 9H15zm-4 9H9v-4H6l4-4 4 4h-3v4z"/></svg>
-                <span class="truncate text-[12px] font-semibold">{{ invoiceFile ? invoiceFile.name : 'Selecionar arquivo da nota fiscal' }}</span>
+                <img v-if="invoicePreview" :src="invoicePreview" class="h-9 w-9 rounded-md object-cover" alt="Prévia da nota" />
+                <span class="min-w-0"><span class="block truncate text-[12px] font-semibold">{{ invoiceFile ? invoiceFile.name : 'Selecionar arquivo da nota fiscal' }}</span><small v-if="invoiceFile" class="block text-[10px] opacity-70">{{ fileSize }} · pronta para enviar</small></span>
               </button>
               <button
                 v-if="invoiceFile"
                 type="button"
                 class="px-3 py-2.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 text-[12px] font-semibold cursor-pointer border border-red-100"
-                @click="invoiceFile = null"
+                @click="clearInvoice"
               >
                 Remover
               </button>

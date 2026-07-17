@@ -1,11 +1,13 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { usePayable } from '../../composables/usePayable'
 import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
 import { useSuppliers } from '../../composables/useSuppliers'
 import { useConfirm } from '../../composables/useConfirm'
 import KPICard from '../ui/KPICard.vue'
+import TableFooter from '../ui/TableFooter.vue'
+import { useTableState } from '../../composables/useTableState'
 
 const props = defineProps({ showToast: Function })
 
@@ -225,6 +227,18 @@ const filteredCP = computed(() => {
   return list
 })
 
+const { search: cpSearch, page: cpPage, pageSize: cpPageSize, filtered: searchedCP, pages: cpPages, paged: pagedCP } = useTableState('payable', filteredCP, (list, q) => {
+  if (!q) return list
+  return list.filter(c => [c.description, c.document, c.vehicle_plate, c.driver_name, c.supplier_name]
+    .some(value => String(value || '').toLocaleLowerCase('pt-BR').includes(q)))
+})
+
+try {
+  const saved = JSON.parse(localStorage.getItem('cf_filters_payable') || '{}')
+  cpFilter.value = saved.status || 'all'; cpCatFilter.value = saved.category || 'all'; cpDriverFilter.value = saved.driver || ''
+} catch { /* preferência inválida: usa padrão */ }
+watch([cpFilter, cpCatFilter, cpDriverFilter], () => localStorage.setItem('cf_filters_payable', JSON.stringify({ status: cpFilter.value, category: cpCatFilter.value, driver: cpDriverFilter.value })))
+
 const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
 
 function fmtDate(raw) {
@@ -318,6 +332,10 @@ onMounted(() => {
 
       <!-- Filters -->
       <div class="glass rounded-[11px] py-3 px-[18px] mb-3.5 space-y-2.5">
+        <div class="relative max-w-[440px]">
+          <svg class="absolute left-3 top-2.5 text-stone-400" width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M9.5 3a6.5 6.5 0 104.1 11.54L19.05 20 20.5 18.55l-5.46-5.45A6.5 6.5 0 009.5 3zm0 2a4.5 4.5 0 110 9 4.5 4.5 0 010-9z"/></svg>
+          <input v-model="cpSearch" class="finput !pl-9 !py-2" placeholder="Buscar descrição, placa, motorista ou fornecedor..." />
+        </div>
         <!-- linha 1: status + categoria -->
         <div class="flex gap-2 items-center flex-wrap">
           <span class="text-xs font-bold text-slate-500">STATUS:</span>
@@ -371,7 +389,7 @@ onMounted(() => {
             </tr>
           </thead>
           <tbody>
-            <tr class="trow" v-for="c in filteredCP" :key="c.id">
+            <tr class="trow" v-for="c in pagedCP" :key="c.id">
               <td class="td whitespace-nowrap">
                 <div class="font-semibold text-stone-800">{{ fmtDate(c.due_date) }}</div>
                 <span v-if="dueBadge(c.due_date, c.status)" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full" :class="dueBadge(c.due_date, c.status).cls">
@@ -457,7 +475,8 @@ onMounted(() => {
             </tr>
           </tbody>
         </table>
-        <div v-if="!filteredCP.length" class="text-center text-slate-400 text-xs py-10">Nenhuma conta encontrada</div>
+        <div v-if="!searchedCP.length" class="text-center py-12"><div class="text-2xl mb-2">⌕</div><strong class="block text-sm text-stone-600">Nenhuma conta encontrada</strong><span class="text-xs text-stone-400">Tente limpar a busca ou alterar os filtros.</span></div>
+        <TableFooter v-else :page="cpPage" :pages="cpPages" :total="searchedCP.length" :page-size="cpPageSize" @update:page="cpPage = $event" @update:page-size="cpPageSize = $event" />
       </div>
     </template>
 

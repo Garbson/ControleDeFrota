@@ -26,6 +26,7 @@ const mockDashboardResponse = {
   recentMovements: [
     { id: 1, type: 'saida', qty: 4, driver_name: 'MATHEUS', item_name: 'Supercargo Liso', mov_date: '2026-05-24' },
   ],
+  pendingActions: { overduePayables: 4, overdueValue: 9800, dueSoonPayables: 3, missingInvoices: 8, pendingFines: 2, pendingFinesValue: 750 },
 }
 
 describe('useDashboard', () => {
@@ -36,7 +37,7 @@ describe('useDashboard', () => {
 
   it('fetchDashboard popula kpis, topDrivers e recentMovements', async () => {
     const { useDashboard } = await import('../composables/useDashboard')
-    const { kpis, topDrivers, recentMovements, fetchDashboard } = useDashboard()
+    const { kpis, topDrivers, recentMovements, pendingActions, fetchDashboard } = useDashboard()
 
     api.get.mockResolvedValueOnce(mockDashboardResponse)
 
@@ -49,6 +50,8 @@ describe('useDashboard', () => {
     expect(topDrivers.value).toHaveLength(3)
     expect(topDrivers.value[0].name).toBe('MATHEUS')
     expect(recentMovements.value).toHaveLength(1)
+    expect(pendingActions.value.overduePayables).toBe(4)
+    expect(pendingActions.value.missingInvoices).toBe(8)
   })
 
   it('lida com resposta vazia sem erros', async () => {

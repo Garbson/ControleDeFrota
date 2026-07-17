@@ -1,9 +1,12 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useFines } from '../../composables/useFines'
 import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
 import { useConfirm } from '../../composables/useConfirm'
+import TableFooter from '../ui/TableFooter.vue'
+
+const props = defineProps({ showToast: Function })
 
 const { items, summary, loading, descriptions, fetchAll, fetchSummary, fetchDescriptions, create, update, markPaid, markAppeal, remove } = useFines()
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
@@ -65,6 +68,16 @@ const filtered = computed(() => {
   if (descriptionFilter.value) list = list.filter(f => (f.description || '').toLowerCase().includes(descriptionFilter.value.toLowerCase()))
   return list
 })
+const finePage = ref(1)
+const finePageSize = ref(Number(localStorage.getItem('cf_fines_page_size')) || 20)
+const finePages = computed(() => Math.max(1, Math.ceil(filtered.value.length / finePageSize.value)))
+const pagedFines = computed(() => filtered.value.slice((finePage.value - 1) * finePageSize.value, finePage.value * finePageSize.value))
+statusFilter.value = localStorage.getItem('cf_filter_fines') || 'all'
+watch([statusFilter, descriptionFilter, finePageSize], () => {
+  finePage.value = 1
+  localStorage.setItem('cf_filter_fines', statusFilter.value)
+  localStorage.setItem('cf_fines_page_size', finePageSize.value)
+})
 
 const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
@@ -109,8 +122,10 @@ async function submit() {
     const data = { ...form.value, driver_id: form.value.driver_id || null, value: Number(form.value.value) }
     if (editingId.value) {
       await update(editingId.value, data)
+      props.showToast?.('✅ Multa atualizada')
     } else {
       await create(data)
+      props.showToast?.('✅ Multa lançada e incluída no financeiro')
     }
     showModal.value = false
     resetForm()
@@ -124,16 +139,19 @@ async function submit() {
 async function pay(fine) {
   if (!await confirmAction({ title: 'Confirmar pagamento', message: `Marcar a multa de R$ ${Number(fine.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} como paga?`, confirmText: 'Confirmar pagamento', tone: 'primary' })) return
   await markPaid(fine.id, new Date().toISOString().split('T')[0])
+  props.showToast?.('✅ Multa marcada como paga')
 }
 
 async function appeal(fine) {
   if (!await confirmAction({ title: 'Enviar para recurso', message: 'Tem certeza que deseja marcar esta multa como em recurso?', confirmText: 'Confirmar recurso', tone: 'primary' })) return
   await markAppeal(fine.id)
+  props.showToast?.('✅ Multa enviada para recurso')
 }
 
 async function del(fine) {
   if (!await confirmAction({ title: 'Remover multa', message: 'Tem certeza que deseja remover esta multa?', confirmText: 'Remover' })) return
   await remove(fine.id)
+  props.showToast?.('✅ Multa removida')
 }
 
 onMounted(async () => {
@@ -198,7 +216,7 @@ onMounted(async () => {
 
     <!-- Tabela -->
     <div class="glass rounded-xl overflow-hidden">
-      <div v-if="loading" class="text-center text-slate-400 text-xs py-10">Carregando...</div>
+      <div v-if="loading" class="space-y-2 p-4"><div v-for="i in 6" :key="i" class="skeleton h-12 rounded-lg" /></div>
       <template v-else>
         <div class="grid grid-cols-[1.5fr_1fr_1fr_110px_120px_110px_160px] gap-2 px-[18px] py-2.5 border-b border-stone-200">
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Motorista</div>
@@ -211,7 +229,7 @@ onMounted(async () => {
         </div>
 
         <div
-          v-for="f in filtered"
+          v-for="f in pagedFines"
           :key="f.id"
           class="grid grid-cols-[1.5fr_1fr_1fr_110px_120px_110px_160px] gap-2 px-[18px] py-3 border-b border-stone-100 items-center"
         >
@@ -293,9 +311,8 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div v-if="!filtered.length" class="text-center text-slate-400 text-xs py-10">
-          Nenhuma multa {{ statusFilter !== 'all' ? `com status "${statusFilter}"` : '' }}
-        </div>
+        <div v-if="!filtered.length" class="text-center py-12"><div class="text-2xl mb-2">⌕</div><strong class="block text-sm text-stone-600">Nenhuma multa encontrada</strong><span class="text-xs text-stone-400">Tente limpar o código ou alterar o status.</span></div>
+        <TableFooter v-else :page="finePage" :pages="finePages" :total="filtered.length" :page-size="finePageSize" @update:page="finePage = $event" @update:page-size="finePageSize = $event" />
       </template>
     </div>
 

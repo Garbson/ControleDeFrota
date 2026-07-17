@@ -50,6 +50,19 @@ router.get('/', async (req, res) => {
       LIMIT 10
     `)
 
+    const [payableAlerts] = await query(`
+      SELECT
+        SUM(status='pendente' AND due_date < CURDATE()) AS overdue_count,
+        COALESCE(SUM(CASE WHEN status='pendente' AND due_date < CURDATE() THEN value ELSE 0 END), 0) AS overdue_value,
+        SUM(status='pendente' AND due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)) AS due_soon_count,
+        SUM(status='pendente' AND invoice_url IS NULL) AS missing_invoice_count
+      FROM accounts_payable
+    `)
+    const [fineAlerts] = await query(`
+      SELECT COUNT(*) AS pending_count, COALESCE(SUM(value), 0) AS pending_value
+      FROM fines WHERE status IN ('pendente', 'recurso')
+    `)
+
     res.json({
       kpis: {
         activeDrivers:  drivers.total,
@@ -64,6 +77,14 @@ router.get('/', async (req, res) => {
       },
       topDrivers,
       recentMovements,
+      pendingActions: {
+        overduePayables: Number(payableAlerts.overdue_count || 0),
+        overdueValue: Number(payableAlerts.overdue_value || 0),
+        dueSoonPayables: Number(payableAlerts.due_soon_count || 0),
+        missingInvoices: Number(payableAlerts.missing_invoice_count || 0),
+        pendingFines: Number(fineAlerts.pending_count || 0),
+        pendingFinesValue: Number(fineAlerts.pending_value || 0),
+      },
     })
   } catch (err) {
     console.error(err)

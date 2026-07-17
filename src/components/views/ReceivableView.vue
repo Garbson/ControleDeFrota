@@ -1,8 +1,10 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useReceivable } from '../../composables/useReceivable'
 import KPICard from '../ui/KPICard.vue'
 import { useConfirm } from '../../composables/useConfirm'
+import TableFooter from '../ui/TableFooter.vue'
+import { useTableState } from '../../composables/useTableState'
 
 const props = defineProps({ showToast: Function })
 
@@ -118,6 +120,14 @@ const filteredCR = computed(() => {
   return items.value.filter(c => c.status === crFilter.value)
 })
 
+const { search: crSearch, page: crPage, pageSize: crPageSize, filtered: searchedCR, pages: crPages, paged: pagedCR } = useTableState('receivable', filteredCR, (list, q) => {
+  if (!q) return list
+  return list.filter(c => [c.client, c.description, c.document, c.vehicle_plate, c.driver_name]
+    .some(value => String(value || '').toLocaleLowerCase('pt-BR').includes(q)))
+})
+crFilter.value = localStorage.getItem('cf_filter_receivable') || 'all'
+watch(crFilter, value => localStorage.setItem('cf_filter_receivable', value))
+
 const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
 
 function fmtDate(raw) {
@@ -173,7 +183,7 @@ onMounted(() => {
       @change="handleReceiptFile"
     />
 
-    <div v-if="loading" class="flex items-center justify-center py-20 text-slate-400 text-sm">Carregando...</div>
+    <div v-if="loading" class="space-y-4"><div class="grid grid-cols-4 gap-3.5"><div v-for="i in 4" :key="i" class="skeleton h-[118px] rounded-xl" /></div><div class="skeleton h-[340px] rounded-xl" /></div>
 
     <template v-else>
       <div class="grid grid-cols-4 gap-3.5 mb-5">
@@ -184,7 +194,8 @@ onMounted(() => {
       </div>
 
       <!-- Filters -->
-      <div class="glass rounded-[11px] py-3.5 px-[18px] mb-3.5 flex gap-2.5 items-center">
+      <div class="glass rounded-[11px] py-3.5 px-[18px] mb-3.5 flex flex-wrap gap-2.5 items-center">
+        <div class="relative min-w-[280px] flex-1 max-w-[440px]"><span class="absolute left-3 top-2 text-stone-400">⌕</span><input v-model="crSearch" class="finput !pl-9 !py-1.5" placeholder="Buscar cliente, descrição, placa ou motorista..." /></div>
         <span class="text-xs font-bold text-slate-500">FILTRAR:</span>
         <button class="sbtn" :class="{ on: crFilter === 'all' }" @click="crFilter = 'all'">Todos</button>
         <button class="sbtn" :class="{ on: crFilter === 'pendente' }" @click="crFilter = 'pendente'">Pendentes</button>
@@ -207,7 +218,7 @@ onMounted(() => {
             </tr>
           </thead>
           <tbody>
-            <tr class="trow" v-for="c in filteredCR" :key="c.id">
+            <tr class="trow" v-for="c in pagedCR" :key="c.id">
               <td class="td whitespace-nowrap">
                 <div class="font-semibold text-stone-800">{{ fmtDate(c.due_date || c.issue_date) }}</div>
                 <span v-if="dueBadge(c.due_date, c.status)" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full" :class="dueBadge(c.due_date, c.status).cls">
@@ -271,7 +282,8 @@ onMounted(() => {
             </tr>
           </tbody>
         </table>
-        <div v-if="!filteredCR.length" class="text-center text-slate-400 text-xs py-10">Nenhum registro encontrado</div>
+        <div v-if="!searchedCR.length" class="text-center py-12"><div class="text-2xl mb-2">⌕</div><strong class="block text-sm text-stone-600">Nenhum recebimento encontrado</strong><span class="text-xs text-stone-400">Tente limpar a busca ou alterar o filtro.</span></div>
+        <TableFooter v-else :page="crPage" :pages="crPages" :total="searchedCR.length" :page-size="crPageSize" @update:page="crPage = $event" @update:page-size="crPageSize = $event" />
       </div>
     </template>
 
