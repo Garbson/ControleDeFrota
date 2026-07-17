@@ -5,8 +5,11 @@ const os = require('os')
 const path = require('path')
 const crypto = require('crypto')
 const { spawn } = require('child_process')
+const { once } = require('events')
 const { pipeline } = require('stream/promises')
 const { createGzip } = require('zlib')
+const mysql = require('mysql2')
+const mysqlPromise = require('mysql2/promise')
 const {
   PutObjectCommand,
   HeadObjectCommand,
@@ -29,33 +32,69 @@ function run(command, args, options = {}) {
 }
 
 async function createDatabaseDump(destination) {
-  const args = [
-    '--single-transaction',
-    '--no-tablespaces',
-    '--skip-lock-tables',
-    `--host=${process.env.DB_HOST || 'controlefrota-mysql'}`,
-    `--port=${process.env.DB_PORT || '3306'}`,
-    `--user=${process.env.DB_USER}`,
-    '--default-character-set=utf8mb4',
-    process.env.DB_NAME || 'controlefrota',
-  ]
-
-  const child = spawn('mysqldump', args, {
-    env: { ...process.env, MYSQL_PWD: process.env.DB_PASS },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  let stderr = ''
-  child.stderr.on('data', chunk => { stderr += chunk.toString() })
-  const completed = new Promise((resolve, reject) => {
-    child.on('error', reject)
-    child.on('close', code => code === 0
-      ? resolve()
-      : reject(new Error(`mysqldump falhou (${code}): ${stderr.trim()}`)))
+  const database = process.env.DB_NAME || 'controlefrota'
+  const connection = await mysqlPromise.createConnection({
+    host: process.env.DB_HOST || 'controlefrota-mysql',
+    port: Number(process.env.DB_PORT || 3306),
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database,
+    charset: 'utf8mb4',
+    dateStrings: true,
+    supportBigNumbers: true,
+    bigNumberStrings: true,
   })
 
-  await pipeline(child.stdout, createGzip({ level: 9 }), fs.createWriteStream(destination))
-  await completed
-  await run('gzip', ['-t', destination])
+  const gzip = createGzip({ level: 9 })
+  const completed = pipeline(gzip, fs.createWriteStream(destination))
+  const write = async chunk => {
+    if (!gzip.write(chunk)) await once(gzip, 'drain')
+  }
+
+  try {
+    await connection.query('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ')
+    await connection.query('START TRANSACTION WITH CONSISTENT SNAPSHOT')
+    const [tableRows] = await connection.query("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'")
+    const tables = tableRows.map(row => Object.values(row)[0]).sort()
+
+    await write(`-- ControleDeFrota backup\n-- Created: ${new Date().toISOString()}\n`)
+    await write('SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\n')
+    await write(`CREATE DATABASE IF NOT EXISTS \`${database.replace(/`/g, '``')}\` CHARACTER SET utf8mb4;\n`)
+    await write(`USE \`${database.replace(/`/g, '``')}\`;\n\n`)
+
+    for (const table of tables) {
+      const escapedTable = `\`${table.replace(/`/g, '``')}\``
+      const [createRows] = await connection.query(`SHOW CREATE TABLE ${escapedTable}`)
+      const createStatement = createRows[0]['Create Table']
+      await write(`DROP TABLE IF EXISTS ${escapedTable};\n${createStatement};\n`)
+
+      const [rows] = await connection.query(`SELECT * FROM ${escapedTable}`)
+      if (rows.length) {
+        const columns = Object.keys(rows[0])
+        const escapedColumns = columns.map(column => `\`${column.replace(/`/g, '``')}\``).join(',')
+        for (let index = 0; index < rows.length; index += 250) {
+          const values = rows.slice(index, index + 250).map(row =>
+            `(${columns.map(column => mysql.escape(row[column])).join(',')})`
+          ).join(',\n')
+          await write(`INSERT INTO ${escapedTable} (${escapedColumns}) VALUES\n${values};\n`)
+        }
+      }
+      await write('\n')
+    }
+
+    await connection.query('COMMIT')
+    await write('SET FOREIGN_KEY_CHECKS=1;\n-- Dump completed\n')
+    gzip.end()
+    await completed
+    await run('gzip', ['-t', destination])
+  } catch (err) {
+    gzip.destroy(err)
+    await completed.catch(() => {})
+    await connection.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    await connection.end()
+  }
 }
 
 async function createUploadsArchive(destination) {

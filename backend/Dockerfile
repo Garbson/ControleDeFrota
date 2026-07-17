@@ -1,8 +1,6 @@
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
-
-RUN apk add --no-cache mysql-client
 
 # Dependências primeiro (cache layer)
 COPY package*.json ./
