@@ -1,26 +1,107 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useReceivable } from '../../composables/useReceivable'
+import { useDrivers } from '../../composables/useDrivers'
+import { useVehicles } from '../../composables/useVehicles'
 import KPICard from '../ui/KPICard.vue'
 import { useConfirm } from '../../composables/useConfirm'
 import TableFooter from '../ui/TableFooter.vue'
 import { useTableState } from '../../composables/useTableState'
+import { printTable } from '../../utils/printTable'
+import { exportExcelGeneric, exportWordGeneric } from '../../utils/exportTable'
 
 const props = defineProps({ showToast: Function })
 
-const { items, loading, fetchAll, fetchSummary, markReceived, update, remove, uploadReceipt, deleteReceipt } = useReceivable()
+const { items, loading, fetchAll, fetchSummary, create, markReceived, update, remove, removeGroup, uploadReceipt, deleteReceipt } = useReceivable()
+const { drivers, fetchAll: fetchDrivers } = useDrivers()
+const { vehicles, fetchAll: fetchVehicles } = useVehicles()
 const { confirmAction } = useConfirm()
+
+const creatingReceivable = ref(false)
+const createSaving = ref(false)
+const createError = ref('')
+const createForm = ref({ value: '', issue_date: '', client: '', description: '', carga: '', driver_id: '', vehicle_id: '', obs: '', weight: '', unit_price: '' })
+const createHasEntrada = ref(false)
+const createEntrada = ref({ amount: '', due_date: '' })
+const createInstallments = ref([{ amount: '', due_date: '' }])
+
+function openCreateReceivable() {
+  createForm.value = { value: '', issue_date: '', client: '', description: '', carga: '', driver_id: '', vehicle_id: '', obs: '', weight: '', unit_price: '' }
+  createHasEntrada.value = false
+  createEntrada.value = { amount: '', due_date: '' }
+  createInstallments.value = [{ amount: '', due_date: '' }]
+  createError.value = ''
+  creatingReceivable.value = true
+}
+
+function addInstallment() {
+  createInstallments.value.push({ amount: '', due_date: '' })
+}
+
+function removeInstallment(idx) {
+  if (createInstallments.value.length > 1) createInstallments.value.splice(idx, 1)
+}
+
+async function saveCreateReceivable() {
+  if (!createForm.value.value || !createForm.value.client) {
+    createError.value = 'Valor e cliente são obrigatórios'
+    return
+  }
+  const allInstallments = []
+  if (createHasEntrada.value && createEntrada.value.amount && createEntrada.value.due_date) {
+    allInstallments.push({ amount: Number(createEntrada.value.amount), due_date: createEntrada.value.due_date, is_entrada: true })
+  }
+  for (const i of createInstallments.value) {
+    if (i.amount && i.due_date) allInstallments.push({ amount: Number(i.amount), due_date: i.due_date, is_entrada: false })
+  }
+  if (!allInstallments.length) {
+    createError.value = 'Adicione pelo menos uma parcela ou entrada com data e valor'
+    return
+  }
+  createSaving.value = true
+  createError.value = ''
+  try {
+    await create({
+      value: Number(createForm.value.value),
+      issue_date: createForm.value.issue_date || null,
+      client: createForm.value.client,
+      description: createForm.value.description || null,
+      carga: createForm.value.carga || null,
+      driver_id: createForm.value.driver_id || null,
+      vehicle_id: createForm.value.vehicle_id || null,
+      type: 'frete',
+      obs: createForm.value.obs || null,
+      weight: createForm.value.weight ? Number(createForm.value.weight) : null,
+      unit_price: createForm.value.unit_price ? Number(createForm.value.unit_price) : null,
+      installments: allInstallments,
+    })
+    creatingReceivable.value = false
+    props.showToast?.('Conta a receber criada')
+  } catch (e) {
+    createError.value = e.message || 'Erro ao criar'
+  } finally {
+    createSaving.value = false
+  }
+}
 
 const editingReceivable = ref(null)
 const viewingReceivable = ref(null)
 const editSaving = ref(false)
 const editError = ref('')
-const editForm = ref({ value: '', due_date: '', client: '', description: '', obs: '' })
+const editForm = ref({ value: '', due_date: '', issue_date: '', client: '', description: '', carga: '', obs: '', weight: '', unit_price: '' })
 
 async function deleteReceivable(c) {
-  if (!await confirmAction({ title: 'Excluir conta a receber', message: `Excluir a conta de "${c.client || 'sem cliente'}" no valor de R$ ${Number(c.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`, confirmText: 'Excluir' })) return
+  const isGroup = !!c.group_id
+  const msg = isGroup
+    ? `Excluir TODAS as parcelas do grupo de "${c.client || 'sem cliente'}"?`
+    : `Excluir a conta de "${c.client || 'sem cliente'}" no valor de R$ ${Number(c.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`
+  if (!await confirmAction({ title: 'Excluir conta a receber', message: msg, confirmText: 'Excluir' })) return
   try {
-    await remove(c.id)
+    if (isGroup) {
+      await removeGroup(c.id)
+    } else {
+      await remove(c.id)
+    }
     props.showToast?.('Conta a receber excluída')
     await fetchSummary()
   } catch {
@@ -33,9 +114,13 @@ function openEditReceivable(c) {
   editForm.value = {
     value: c.value,
     due_date: c.due_date?.split('T')[0] || '',
+    issue_date: c.issue_date?.split('T')[0] || '',
     client: c.client || '',
     description: c.description || '',
+    carga: c.carga || '',
     obs: c.obs || '',
+    weight: c.weight || '',
+    unit_price: c.unit_price || '',
   }
   editError.value = ''
 }
@@ -47,15 +132,18 @@ async function saveEditReceivable() {
   try {
     await update(editingReceivable.value.id, {
       value: Number(editForm.value.value),
-      due_date: editForm.value.due_date || editingReceivable.value.due_date,
+      due_date: editForm.value.due_date || null,
       client: editForm.value.client,
       description: editForm.value.description || null,
+      carga: editForm.value.carga || null,
       obs: editForm.value.obs || null,
       driver_id: editingReceivable.value.driver_id || null,
       vehicle_id: editingReceivable.value.vehicle_id || null,
       type: editingReceivable.value.type || 'frete',
-      issue_date: editingReceivable.value.issue_date || null,
+      issue_date: editForm.value.issue_date || null,
       document: editingReceivable.value.document || null,
+      weight: editForm.value.weight ? Number(editForm.value.weight) : null,
+      unit_price: editForm.value.unit_price ? Number(editForm.value.unit_price) : null,
     })
     editingReceivable.value = null
   } catch (e) {
@@ -114,21 +202,51 @@ function isImage(url) {
 }
 
 const crFilter = ref('all')
+const crIssueDateFrom = ref(localStorage.getItem('cf_cr_issueDateFrom') || '')
+const crIssueDateTo = ref(localStorage.getItem('cf_cr_issueDateTo') || '')
 
 const filteredCR = computed(() => {
-  if (crFilter.value === 'all') return items.value
-  return items.value.filter(c => c.status === crFilter.value)
+  let list = items.value
+  if (crFilter.value !== 'all') list = list.filter(c => c.status === crFilter.value)
+  if (crIssueDateFrom.value) list = list.filter(c => (c.issue_date || '') >= crIssueDateFrom.value)
+  if (crIssueDateTo.value) list = list.filter(c => (c.issue_date || '') <= crIssueDateTo.value + 'T23:59:59')
+  return list
 })
 
 const { search: crSearch, page: crPage, pageSize: crPageSize, filtered: searchedCR, pages: crPages, paged: pagedCR } = useTableState('receivable', filteredCR, (list, q) => {
   if (!q) return list
-  return list.filter(c => [c.client, c.description, c.document, c.vehicle_plate, c.driver_name]
+  return list.filter(c => [c.client, c.description, c.carga, c.document, c.vehicle_plate, c.driver_name]
     .some(value => String(value || '').toLocaleLowerCase('pt-BR').includes(q)))
 })
 crFilter.value = localStorage.getItem('cf_filter_receivable') || 'all'
 watch(crFilter, value => localStorage.setItem('cf_filter_receivable', value))
+watch(crIssueDateFrom, v => localStorage.setItem('cf_cr_issueDateFrom', v))
+watch(crIssueDateTo, v => localStorage.setItem('cf_cr_issueDateTo', v))
+function clearIssueDateFilter() { crIssueDateFrom.value = ''; crIssueDateTo.value = '' }
 
 const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+
+function restFrete(c) {
+  if (!c.group_id) return 0
+  const groupItems = items.value.filter(i => i.group_id === c.group_id)
+  const total = groupItems.reduce((s, i) => s + Number(i.value || 0), 0)
+  const sorted = [...groupItems].sort((a, b) => {
+    const da = a.due_date || '', db = b.due_date || ''
+    if (da !== db) return da < db ? -1 : 1
+    return a.id - b.id
+  })
+  let cumulative = 0
+  for (const item of sorted) {
+    cumulative += Number(item.value || 0)
+    if (item.id === c.id) return total - cumulative
+  }
+  return 0
+}
+
+function groupTotal(c) {
+  if (!c.group_id) return Number(c.value || 0)
+  return items.value.filter(i => i.group_id === c.group_id).reduce((s, i) => s + Number(i.value || 0), 0)
+}
 
 function fmtDate(raw) {
   if (!raw) return '—'
@@ -166,9 +284,39 @@ async function handleMarkReceived(item) {
   props.showToast?.(`✅ Frete recebido: ${item.client || item.description || ''}`)
 }
 
+function buildExportData() {
+  const data = searchedCR.value
+  const statusLabel = { pendente: 'Pendente', recebido: 'Recebido' }
+  return {
+    title: 'Contas a Receber',
+    subtitle: crFilter.value !== 'all' ? `Status: ${statusLabel[crFilter.value]}` : null,
+    headers: ['Cliente', 'Motorista', 'Carga', 'Peso', 'P. Unit', 'Valor Frete (R$)', 'Valor Parcela (R$)', 'Valor Restante (R$)', 'Vencimento', 'Status'],
+    rows: data.map(c => ({ type: 'row', data: [
+      c.client || '',
+      c.driver_name || '',
+      c.carga || '',
+      c.weight ? Number(c.weight) : '',
+      c.unit_price ? Number(c.unit_price) : '',
+      groupTotal(c),
+      Number(c.value || 0),
+      restFrete(c),
+      fmtDate(c.due_date),
+      statusLabel[c.status] || c.status || '',
+    ]})),
+    totalLabel: 'Total',
+    totalValue: data.reduce((s, c) => s + Number(c.value || 0), 0),
+    moneyCols: [5, 6, 7],
+  }
+}
+function handlePrint() { const d = buildExportData(); printTable({ ...d, totals: { label: d.totalLabel, value: d.totalValue } }) }
+function handleExcel() { exportExcelGeneric(buildExportData()) }
+function handleWord() { exportWordGeneric(buildExportData()) }
+
 onMounted(() => {
   fetchAll()
   fetchSummary()
+  fetchDrivers()
+  fetchVehicles()
 })
 </script>
 
@@ -200,39 +348,71 @@ onMounted(() => {
         <button class="sbtn" :class="{ on: crFilter === 'all' }" @click="crFilter = 'all'">Todos</button>
         <button class="sbtn" :class="{ on: crFilter === 'pendente' }" @click="crFilter = 'pendente'">Pendentes</button>
         <button class="sbtn" :class="{ on: crFilter === 'recebido' }" @click="crFilter = 'recebido'">Recebidos</button>
+        <div class="w-px h-5 bg-stone-200 mx-1" />
+        <span class="text-xs font-bold text-slate-500">CARREGAMENTO:</span>
+        <div class="flex items-center gap-1.5">
+          <input v-model="crIssueDateFrom" type="date" class="finput !w-auto !py-1.5 text-xs" title="Carregamento de" />
+          <span class="text-xs text-stone-400">até</span>
+          <input v-model="crIssueDateTo" type="date" class="finput !w-auto !py-1.5 text-xs" title="Carregamento até" />
+          <button v-if="crIssueDateFrom || crIssueDateTo" @click="clearIssueDateFilter" class="text-[10px] text-red-500 hover:text-red-700 font-bold">limpar</button>
+        </div>
+        <div class="ml-auto flex gap-2 items-center">
+          <button @click="openCreateReceivable" class="btn-p !py-1.5 !px-4 text-xs flex items-center gap-1.5">
+            <svg width="13" height="13" fill="white" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            Novo
+          </button>
+          <button @click="handlePrint" class="sbtn flex items-center gap-1" title="Imprimir / PDF">
+            <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+            PDF
+          </button>
+          <button @click="handleExcel" class="sbtn flex items-center gap-1" title="Exportar Excel">Excel</button>
+          <button @click="handleWord" class="sbtn flex items-center gap-1" title="Exportar Word">Word</button>
+        </div>
       </div>
 
       <!-- Table -->
-      <div class="glass rounded-xl overflow-hidden">
-        <table class="w-full border-collapse">
+      <div class="glass rounded-xl overflow-x-auto">
+        <table class="w-full border-collapse min-w-[1250px]">
           <thead>
             <tr>
-              <th class="th">Vencimento</th>
               <th class="th">Cliente</th>
-              <th class="th">Descrição</th>
-              <th class="th">Valor</th>
-              <th class="th">Placa</th>
               <th class="th">Motorista</th>
+              <th class="th">Carga</th>
+              <th class="th">Peso</th>
+              <th class="th">P. Unit</th>
+              <th class="th">Valor Frete</th>
+              <th class="th">Valor Parcela</th>
+              <th class="th">Valor Restante</th>
+              <th class="th">Venc.</th>
               <th class="th">Status</th>
               <th class="th" style="text-align:center">Ação</th>
             </tr>
           </thead>
           <tbody>
             <tr class="trow" v-for="c in pagedCR" :key="c.id">
+              <td class="td font-semibold text-stone-800 text-xs max-w-[160px] truncate" :title="c.client">{{ c.client || '—' }}</td>
+              <td class="td text-xs text-stone-700">{{ c.driver_name || '—' }}</td>
+              <td class="td text-xs max-w-[140px] truncate" :title="c.carga">{{ c.carga || '—' }}</td>
+              <td class="td text-xs text-stone-600 whitespace-nowrap">{{ c.weight ? Number(c.weight).toLocaleString('pt-BR') : '—' }}</td>
+              <td class="td text-xs text-stone-600 whitespace-nowrap">{{ c.unit_price ? Number(c.unit_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '—' }}</td>
               <td class="td whitespace-nowrap">
-                <div class="font-semibold text-stone-800">{{ fmtDate(c.due_date || c.issue_date) }}</div>
+                <div class="font-extrabold text-stone-800">R$ {{ fmt(groupTotal(c)) }}</div>
+              </td>
+              <td class="td whitespace-nowrap">
+                <div class="font-semibold text-stone-700">R$ {{ fmt(c.value) }}</div>
+                <span v-if="c.installment_label" class="text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5 inline-block" :class="c.installment_label === 'Entrada' ? 'bg-blue-50 text-blue-600' : 'bg-stone-100 text-stone-500'">{{ c.installment_label }}</span>
+              </td>
+              <td class="td whitespace-nowrap">
+                <span :class="restFrete(c) > 0 ? 'text-amber-600 font-bold' : 'text-green-600 font-semibold'">
+                  R$ {{ fmt(restFrete(c)) }}
+                </span>
+              </td>
+              <td class="td whitespace-nowrap">
+                <div class="text-xs font-semibold text-stone-800">{{ fmtDate(c.due_date) }}</div>
                 <span v-if="dueBadge(c.due_date, c.status)" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full" :class="dueBadge(c.due_date, c.status).cls">
                   {{ dueBadge(c.due_date, c.status).label }}
                 </span>
               </td>
-              <td class="td font-semibold text-stone-800 text-xs max-w-[160px] truncate" :title="c.client">{{ c.client || '—' }}</td>
-              <td class="td text-xs">{{ c.description || c.type || '—' }}</td>
-              <td class="td font-extrabold text-stone-800 whitespace-nowrap">R$ {{ fmt(c.value) }}</td>
-              <td class="td">
-                <span v-if="c.vehicle_plate" class="font-mono text-xs font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded">{{ c.vehicle_plate }}</span>
-                <span v-else class="text-slate-400 text-xs">—</span>
-              </td>
-              <td class="td font-semibold text-stone-800 text-xs">{{ c.driver_name || '—' }}</td>
               <td class="td">
                 <span
                   class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold"
@@ -274,8 +454,8 @@ onMounted(() => {
                   >
                     <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                   </button>
-                  <button v-if="c.status === 'pendente'" @click="handleMarkReceived(c)" class="btn-p !py-1.5 !px-3 text-xs">
-                    Marcar como Recebido
+                  <button v-if="c.status === 'pendente'" @click="handleMarkReceived(c)" class="btn-p !py-1.5 !px-3 text-xs whitespace-nowrap">
+                    Recebido
                   </button>
                 </div>
               </td>
@@ -287,13 +467,129 @@ onMounted(() => {
       </div>
     </template>
 
+    <!-- Modal Criar Conta a Receber -->
+    <Teleport to="body">
+      <div v-if="creatingReceivable" class="fixed inset-0 z-[80] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40" @click="creatingReceivable = false" />
+        <div class="relative glass-strong rounded-2xl w-full max-w-xl z-10 max-h-[90vh] overflow-y-auto">
+          <div class="flex items-center justify-between p-5 border-b border-stone-100 sticky top-0 bg-white/95 backdrop-blur z-10">
+            <h3 class="text-base font-bold text-stone-800 m-0">Nova Conta a Receber</h3>
+            <button @click="creatingReceivable = false" class="text-slate-400 hover:text-stone-600">
+              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+          </div>
+          <div class="p-5 space-y-4">
+            <div>
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">Cliente *</label>
+              <input v-model="createForm.client" type="text" placeholder="Nome do cliente" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+            </div>
+            <div class="grid grid-cols-4 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Valor Total (R$) *</label>
+                <input v-model="createForm.value" type="number" step="0.01" min="0" placeholder="0,00" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Peso (kg)</label>
+                <input v-model="createForm.weight" type="number" step="0.01" min="0" placeholder="0" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Preço Unit.</label>
+                <input v-model="createForm.unit_price" type="number" step="0.0001" min="0" placeholder="0,00" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Data Carregamento</label>
+                <input v-model="createForm.issue_date" type="date" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Descrição</label>
+                <input v-model="createForm.description" type="text" placeholder="Ex: Frete SP → RJ" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Carga</label>
+                <input v-model="createForm.carga" type="text" placeholder="Ex: Soja, Milho, Geral" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Motorista</label>
+                <select v-model="createForm.driver_id" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                  <option value="">— Nenhum —</option>
+                  <option v-for="d in drivers" :key="d.id" :value="d.id">{{ d.name }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Veículo / Placa</label>
+                <select v-model="createForm.vehicle_id" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                  <option value="">— Nenhum —</option>
+                  <option v-for="v in vehicles" :key="v.id" :value="v.id">{{ v.plate }} {{ v.model ? '— ' + v.model : '' }}</option>
+                </select>
+              </div>
+            </div>
+            <!-- Entrada -->
+            <div class="rounded-lg border border-stone-200 p-3">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input v-model="createHasEntrada" type="checkbox" class="w-4 h-4 rounded border-stone-300 text-green-600 focus:ring-green-500" />
+                <span class="text-xs font-bold text-stone-600">Cliente deu entrada?</span>
+              </label>
+              <div v-if="createHasEntrada" class="grid grid-cols-2 gap-3 mt-3">
+                <div>
+                  <label class="block text-[10px] font-bold text-stone-500 mb-1">Valor da Entrada (R$)</label>
+                  <input v-model="createEntrada.amount" type="number" step="0.01" min="0" placeholder="0,00" class="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-stone-500 mb-1">Data da Entrada</label>
+                  <input v-model="createEntrada.due_date" type="date" class="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                </div>
+              </div>
+            </div>
+            <!-- Parcelas -->
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <label class="text-xs font-bold text-stone-600">Parcelas de Pagamento</label>
+                <button @click="addInstallment" type="button" class="text-xs text-green-600 hover:text-green-800 font-bold flex items-center gap-1">
+                  <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                  + Parcela
+                </button>
+              </div>
+              <div class="space-y-2">
+                <div v-for="(inst, idx) in createInstallments" :key="idx" class="flex items-center gap-2">
+                  <span class="text-[10px] font-bold text-stone-400 w-5">{{ idx + 1 }}.</span>
+                  <input v-model="inst.amount" type="number" step="0.01" min="0" placeholder="Valor R$" class="flex-1 border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                  <input v-model="inst.due_date" type="date" placeholder="Data do pagamento" class="flex-1 border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                  <button v-if="createInstallments.length > 1" @click="removeInstallment(idx)" type="button" class="text-red-400 hover:text-red-600 p-1">
+                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">Observação</label>
+              <textarea v-model="createForm.obs" rows="2" placeholder="Informações adicionais..." class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none" />
+            </div>
+            <p v-if="createError" class="text-red-500 text-xs">{{ createError }}</p>
+          </div>
+          <div class="flex gap-3 px-5 pb-5">
+            <button @click="creatingReceivable = false" class="flex-1 border border-stone-200 text-stone-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-stone-50/50">Cancelar</button>
+            <button @click="saveCreateReceivable" :disabled="createSaving" class="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-bold py-2.5 rounded-lg transition-colors">
+              {{ createSaving ? 'Salvando...' : 'Criar Conta a Receber' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Modal Editar Conta a Receber -->
     <Teleport to="body">
       <div v-if="editingReceivable" class="fixed inset-0 z-[80] flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40" @click="editingReceivable = null" />
-        <div class="relative glass-strong rounded-2xl w-full max-w-md z-10">
-          <div class="flex items-center justify-between p-5 border-b border-stone-100">
-            <h3 class="text-base font-bold text-stone-800 m-0">Editar Conta a Receber</h3>
+        <div class="relative glass-strong rounded-2xl w-full max-w-lg z-10 max-h-[90vh] overflow-y-auto">
+          <div class="flex items-center justify-between p-5 border-b border-stone-100 sticky top-0 bg-white/95 backdrop-blur z-10">
+            <div>
+              <h3 class="text-base font-bold text-stone-800 m-0">Editar Registro</h3>
+              <span v-if="editingReceivable.installment_label" class="text-xs font-bold text-blue-600">{{ editingReceivable.installment_label }}</span>
+            </div>
             <button @click="editingReceivable = null" class="text-slate-400 hover:text-stone-600">
               <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
@@ -303,19 +599,39 @@ onMounted(() => {
               <label class="block text-xs font-bold text-stone-600 mb-1.5">Cliente *</label>
               <input v-model="editForm.client" type="text" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
             </div>
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-3 gap-3">
               <div>
                 <label class="block text-xs font-bold text-stone-600 mb-1.5">Valor (R$) *</label>
                 <input v-model="editForm.value" type="number" step="0.01" min="0" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
               </div>
               <div>
-                <label class="block text-xs font-bold text-stone-600 mb-1.5">Vencimento</label>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Data Pgto</label>
                 <input v-model="editForm.due_date" type="date" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
               </div>
+              <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Data Carregamento</label>
+                <input v-model="editForm.issue_date" type="date" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
             </div>
-            <div>
-              <label class="block text-xs font-bold text-stone-600 mb-1.5">Descrição</label>
-              <input v-model="editForm.description" type="text" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Peso (kg)</label>
+                <input v-model="editForm.weight" type="number" step="0.01" min="0" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Preço Unit.</label>
+                <input v-model="editForm.unit_price" type="number" step="0.0001" min="0" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Descrição</label>
+                <input v-model="editForm.description" type="text" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Carga</label>
+                <input v-model="editForm.carga" type="text" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
             </div>
             <div>
               <label class="block text-xs font-bold text-stone-600 mb-1.5">Observação</label>
@@ -347,12 +663,21 @@ onMounted(() => {
               <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
           </div>
-          <div class="px-7 py-6 grid grid-cols-2 gap-4">
+          <div class="px-7 py-6 grid grid-cols-3 gap-4">
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Valor</div>
-              <div class="text-2xl font-extrabold text-green-600">R$ {{ fmt(viewingReceivable.value) }}</div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Valor Frete</div>
+              <div class="text-xl font-extrabold text-green-600">R$ {{ fmt(groupTotal(viewingReceivable)) }}</div>
             </div>
             <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Valor Parcela</div>
+              <div class="text-xl font-extrabold text-stone-700">R$ {{ fmt(viewingReceivable.value) }}</div>
+              <span v-if="viewingReceivable.installment_label" class="text-xs font-bold px-2 py-0.5 rounded mt-1 inline-block" :class="viewingReceivable.installment_label === 'Entrada' ? 'bg-blue-50 text-blue-600' : 'bg-stone-100 text-stone-600'">{{ viewingReceivable.installment_label }}</span>
+            </div>
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Valor Restante</div>
+              <div class="text-xl font-extrabold" :class="restFrete(viewingReceivable) > 0 ? 'text-amber-600' : 'text-green-600'">R$ {{ fmt(restFrete(viewingReceivable)) }}</div>
+            </div>
+            <div class="col-span-2">
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status</div>
               <span
                 class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold"
@@ -362,20 +687,32 @@ onMounted(() => {
               </span>
             </div>
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Vencimento</div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Data Carregamento</div>
+              <div class="text-sm font-semibold text-slate-800">{{ fmtDate(viewingReceivable.issue_date) }}</div>
+            </div>
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Data Pagamento</div>
               <div class="text-sm font-semibold text-slate-800">{{ fmtDate(viewingReceivable.due_date) }}</div>
             </div>
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Tipo</div>
-              <div class="text-sm font-semibold text-slate-800 capitalize">{{ viewingReceivable.type || '—' }}</div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Peso</div>
+              <div class="text-sm font-semibold text-slate-800">{{ viewingReceivable.weight ? Number(viewingReceivable.weight).toLocaleString('pt-BR') + ' kg' : '—' }}</div>
             </div>
-            <div class="col-span-2">
+            <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Preço Unitário</div>
+              <div class="text-sm font-semibold text-slate-800">{{ viewingReceivable.unit_price ? 'R$ ' + fmt(viewingReceivable.unit_price) : '—' }}</div>
+            </div>
+            <div class="col-span-3">
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Cliente</div>
               <div class="text-sm font-semibold text-slate-800">{{ viewingReceivable.client || '—' }}</div>
             </div>
-            <div class="col-span-2">
+            <div>
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Descrição</div>
               <div class="text-sm text-slate-800">{{ viewingReceivable.description || viewingReceivable.document || '—' }}</div>
+            </div>
+            <div class="col-span-2">
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Carga</div>
+              <div class="text-sm font-semibold text-slate-800">{{ viewingReceivable.carga || '—' }}</div>
             </div>
             <div>
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Motorista</div>
@@ -385,12 +722,12 @@ onMounted(() => {
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Placa</div>
               <div class="text-sm font-mono font-bold text-blue-800">{{ viewingReceivable.vehicle_plate || '—' }}</div>
             </div>
-            <div v-if="viewingReceivable.obs" class="col-span-2">
+            <div v-if="viewingReceivable.obs" class="col-span-3">
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Observação</div>
               <div class="text-sm text-stone-600 rounded-lg p-3 bg-stone-50 border border-stone-100">{{ viewingReceivable.obs }}</div>
             </div>
             <!-- Comprovante de recebimento -->
-            <div v-if="viewingReceivable.receipt_url" class="col-span-2">
+            <div v-if="viewingReceivable.receipt_url" class="col-span-3">
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-2">Comprovante de Recebimento</div>
               <div v-if="isImage(viewingReceivable.receipt_url)" class="rounded-lg overflow-hidden border border-stone-200 bg-stone-50">
                 <img

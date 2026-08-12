@@ -38,6 +38,13 @@ export function useReceivable() {
     return res
   }
 
+  async function removeGroup(id) {
+    const res = await api.delete(`/receivable/${id}?group=true`)
+    await fetchAll()
+    await fetchSummary()
+    return res
+  }
+
   async function update(id, data) {
     const res = await api.put(`/receivable/${id}`, data)
     await fetchAll()
@@ -75,5 +82,5 @@ export function useReceivable() {
     return res
   }
 
-  return { items, summary, loading, fetchAll, fetchSummary, create, update, markReceived, remove, uploadReceipt, deleteReceipt }
+  return { items, summary, loading, fetchAll, fetchSummary, create, update, markReceived, remove, removeGroup, uploadReceipt, deleteReceipt }
 }

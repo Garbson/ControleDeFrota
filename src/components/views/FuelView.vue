@@ -5,6 +5,8 @@ import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
 import KPICard from '../ui/KPICard.vue'
 import { useConfirm } from '../../composables/useConfirm'
+import { printTable } from '../../utils/printTable'
+import { exportExcelGeneric, exportWordGeneric } from '../../utils/exportTable'
 
 const props = defineProps({ showToast: Function })
 
@@ -126,6 +128,29 @@ async function submitFuel() {
 
 const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
 
+function buildExportData() {
+  return {
+    title: 'Abastecimentos',
+    headers: ['Data', 'Motorista', 'Placa', 'Litros', 'R$/L', 'Total (R$)', 'Posto', 'Tipo'],
+    rows: sortedRecords.value.map(f => ({ type: 'row', data: [
+      fmtDate(f.fuel_date),
+      f.driver_name || '',
+      f.vehicle_plate || '',
+      Number(f.liters || 0),
+      Number(f.price_liter || 0),
+      Number(f.total || 0),
+      f.station || '',
+      f.fuel_type || '',
+    ]})),
+    totalLabel: 'Total Geral',
+    totalValue: sortedRecords.value.reduce((s, f) => s + Number(f.total || 0), 0),
+    moneyCols: [4, 5],
+  }
+}
+function handlePrint() { const d = buildExportData(); printTable({ ...d, totals: { label: d.totalLabel, value: d.totalValue } }) }
+function handleExcel() { exportExcelGeneric(buildExportData()) }
+function handleWord() { exportWordGeneric(buildExportData()) }
+
 onMounted(() => {
   fetchAll()
   fetchDrivers()
@@ -149,7 +174,13 @@ onMounted(() => {
       <button class="sbtn" :class="{ on: fuelSort === 'data-asc' }" @click="fuelSort = 'data-asc'">↑ Mais antigos</button>
       <button class="sbtn" :class="{ on: fuelSort === 'valor-desc' }" @click="fuelSort = 'valor-desc'">↓ Maior valor</button>
       <button class="sbtn" :class="{ on: fuelSort === 'valor-asc' }" @click="fuelSort = 'valor-asc'">↑ Menor valor</button>
-      <div class="ml-auto">
+      <div class="ml-auto flex gap-2 items-center">
+        <button @click="handlePrint" class="sbtn flex items-center gap-1" title="Imprimir / PDF">
+          <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+          PDF
+        </button>
+        <button @click="handleExcel" class="sbtn flex items-center gap-1" title="Exportar Excel">Excel</button>
+        <button @click="handleWord" class="sbtn flex items-center gap-1" title="Exportar Word">Word</button>
         <button class="btn-p" @click="showFuelForm = true">
           <svg width="13" height="13" fill="white" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
           Novo Abastecimento

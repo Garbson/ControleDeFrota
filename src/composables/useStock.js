@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { optimizeUploadImage } from '../utils/imageUpload'
 import { api } from './useApi'
 
 const items = ref([])
@@ -34,6 +35,7 @@ export function useStock() {
   async function remove(id) {
     const res = await api.delete(`/stock/${id}`)
     items.value = items.value.filter(i => i.id !== id)
+    movements.value = movements.value.filter(m => m.stock_item_id !== id)
     return res
   }
 
@@ -51,5 +53,28 @@ export function useStock() {
     return res
   }
 
-  return { items, movements, loading, fetchAll, fetchMovements, create, update, remove, createMovement, removeMovement }
+  async function uploadInvoice(id, file) {
+    const optimizedFile = await optimizeUploadImage(file)
+    const formData = new FormData()
+    formData.append('invoice', optimizedFile)
+    const data = await api.upload(`/stock/${id}/invoice`, formData)
+    const item = items.value.find(i => i.id === id)
+    if (item) {
+      item.invoice_url = data.invoice_url
+      item.invoice_access_url = data.invoice_access_url
+    }
+    return data
+  }
+
+  async function deleteInvoice(id) {
+    const res = await api.delete(`/stock/${id}/invoice`)
+    const item = items.value.find(i => i.id === id)
+    if (item) {
+      item.invoice_url = null
+      item.invoice_access_url = null
+    }
+    return res
+  }
+
+  return { items, movements, loading, fetchAll, fetchMovements, create, update, remove, createMovement, removeMovement, uploadInvoice, deleteInvoice }
 }

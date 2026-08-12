@@ -8,13 +8,42 @@ router.use(authenticate)
 router.get('/', async (req, res) => {
   try {
     const { type } = req.query
-    let sql = 'SELECT * FROM vehicles WHERE active = 1'
+    let sql = `
+      SELECT v.*,
+        COALESCE((SELECT SUM(m.qty) FROM movements m WHERE m.vehicle_id = v.id AND m.type = 'saida' AND m.stock_item_id IS NOT NULL), 0) AS total_tires
+      FROM vehicles v
+      WHERE v.active = 1
+    `
     const params = []
-    if (type) { sql += ' AND type = ?'; params.push(type) }
-    sql += ' ORDER BY plate'
+    if (type) { sql += ' AND v.type = ?'; params.push(type) }
+    sql += ' ORDER BY v.plate'
     res.json(await query(sql, params))
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar veículos' })
+  }
+})
+
+router.get('/:id', async (req, res) => {
+  try {
+    const [vehicle] = await query('SELECT * FROM vehicles WHERE id = ?', [req.params.id])
+    if (!vehicle) return res.status(404).json({ error: 'Veículo não encontrado' })
+
+    const tireHistory = await query(`
+      SELECT m.id, m.qty, m.mov_date, m.obs,
+             si.description AS item_name, si.brand, si.status AS tire_status,
+             d.name AS driver_name
+      FROM movements m
+      LEFT JOIN stock_items si ON si.id = m.stock_item_id
+      LEFT JOIN drivers d ON d.id = m.driver_id
+      WHERE m.vehicle_id = ? AND m.type = 'saida' AND m.stock_item_id IS NOT NULL
+      ORDER BY m.mov_date DESC
+    `, [req.params.id])
+
+    const totalTires = tireHistory.reduce((s, h) => s + Number(h.qty), 0)
+    res.json({ ...vehicle, tireHistory, total_tires: totalTires })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Erro ao buscar veículo' })
   }
 })
 

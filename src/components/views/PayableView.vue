@@ -8,6 +8,8 @@ import { useConfirm } from '../../composables/useConfirm'
 import KPICard from '../ui/KPICard.vue'
 import TableFooter from '../ui/TableFooter.vue'
 import { useTableState } from '../../composables/useTableState'
+import { printTable } from '../../utils/printTable'
+import { exportExcelGeneric, exportWordGeneric } from '../../utils/exportTable'
 
 const props = defineProps({ showToast: Function })
 
@@ -66,7 +68,7 @@ const editingPayable = ref(null)
 const viewingPayable = ref(null)
 const editSaving = ref(false)
 const editError = ref('')
-const editForm = ref({ value: '', due_date: '', description: '', category: '', obs: '', vehicle_id: null, supplier_id: null, supplier_name_free: null })
+const editForm = ref({ value: '', due_date: '', issue_date: '', document: '', description: '', category: '', obs: '', vehicle_id: null, supplier_id: null, supplier_name_free: null })
 
 // ── Upload de comprovante
 const receiptUploading = ref(null) // id da conta com upload em andamento
@@ -166,7 +168,9 @@ function openEditPayable(c) {
   editForm.value = {
     value: c.value,
     due_date: c.due_date?.split('T')[0] || '',
-    description: c.description || c.document || '',
+    issue_date: c.issue_date?.split('T')[0] || '',
+    document: c.document || '',
+    description: c.description || '',
     category: c.category || 'administrativo',
     obs: c.obs || '',
     vehicle_id: c.vehicle_id || null,
@@ -195,8 +199,8 @@ async function saveEditPayable() {
       vehicle_id: editForm.value.vehicle_id || null,
       supplier_id: editForm.value.supplier_id || null,
       supplier_name_free: supplierFree,
-      document: editingPayable.value.document || null,
-      issue_date: editingPayable.value.issue_date ? String(editingPayable.value.issue_date).split('T')[0] : null,
+      document: editForm.value.document || null,
+      issue_date: editForm.value.issue_date || null,
       status: editingPayable.value.status,
     })
     editingPayable.value = null
@@ -209,7 +213,10 @@ async function saveEditPayable() {
 
 const cpFilter = ref('all')
 const cpCatFilter = ref('all')
-const cpDriverFilter = ref('')
+const cpDateFrom = ref('')
+const cpDateTo = ref('')
+const cpIssueDateFrom = ref('')
+const cpIssueDateTo = ref('')
 const cpSort = ref('vencimento')
 
 const catLabel = { manutencao: 'Manutenção', pecas: 'Peças', pneus: 'Pneus (serv.)', administrativo: 'Administrativo', multas: 'Multas' }
@@ -221,7 +228,10 @@ const filteredCP = computed(() => {
   let list = [...items.value]
   if (cpFilter.value !== 'all') list = list.filter(c => c.status === cpFilter.value)
   if (cpCatFilter.value !== 'all') list = list.filter(c => c.category === cpCatFilter.value)
-  if (cpDriverFilter.value) list = list.filter(c => c.driver_id == cpDriverFilter.value)
+  if (cpDateFrom.value) list = list.filter(c => (c.due_date || '') >= cpDateFrom.value)
+  if (cpDateTo.value) list = list.filter(c => (c.due_date || '') <= cpDateTo.value)
+  if (cpIssueDateFrom.value) list = list.filter(c => (c.issue_date || '') >= cpIssueDateFrom.value)
+  if (cpIssueDateTo.value) list = list.filter(c => (c.issue_date || '') <= cpIssueDateTo.value + 'T23:59:59')
   if (cpSort.value === 'valor-desc') list.sort((a, b) => Number(b.value) - Number(a.value))
   else if (cpSort.value === 'valor-asc') list.sort((a, b) => Number(a.value) - Number(b.value))
   return list
@@ -229,15 +239,23 @@ const filteredCP = computed(() => {
 
 const { search: cpSearch, page: cpPage, pageSize: cpPageSize, filtered: searchedCP, pages: cpPages, paged: pagedCP } = useTableState('payable', filteredCP, (list, q) => {
   if (!q) return list
-  return list.filter(c => [c.description, c.document, c.vehicle_plate, c.driver_name, c.supplier_name]
-    .some(value => String(value || '').toLocaleLowerCase('pt-BR').includes(q)))
+  return list.filter(c => {
+    const value = Number(c.value || 0)
+    const valueVariants = [
+      value.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+      value.toFixed(2),
+      String(value),
+    ]
+    return [c.description, c.document, c.vehicle_plate, c.driver_name, c.supplier_name, ...valueVariants]
+      .some(field => String(field || '').toLocaleLowerCase('pt-BR').includes(q))
+  })
 })
 
 try {
   const saved = JSON.parse(localStorage.getItem('cf_filters_payable') || '{}')
-  cpFilter.value = saved.status || 'all'; cpCatFilter.value = saved.category || 'all'; cpDriverFilter.value = saved.driver || ''
+  cpFilter.value = saved.status || 'all'; cpCatFilter.value = saved.category || 'all'; cpDateFrom.value = saved.dateFrom || ''; cpDateTo.value = saved.dateTo || ''; cpIssueDateFrom.value = saved.issueDateFrom || ''; cpIssueDateTo.value = saved.issueDateTo || ''
 } catch { /* preferência inválida: usa padrão */ }
-watch([cpFilter, cpCatFilter, cpDriverFilter], () => localStorage.setItem('cf_filters_payable', JSON.stringify({ status: cpFilter.value, category: cpCatFilter.value, driver: cpDriverFilter.value })))
+watch([cpFilter, cpCatFilter, cpDateFrom, cpDateTo, cpIssueDateFrom, cpIssueDateTo], () => localStorage.setItem('cf_filters_payable', JSON.stringify({ status: cpFilter.value, category: cpCatFilter.value, dateFrom: cpDateFrom.value, dateTo: cpDateTo.value, issueDateFrom: cpIssueDateFrom.value, issueDateTo: cpIssueDateTo.value })))
 
 const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
 
@@ -291,6 +309,39 @@ async function handleRemove(item) {
   }
 }
 
+function buildExportData() {
+  const data = searchedCP.value
+  const statusLabel = { pendente: 'Pendente', pago: 'Pago', cancelado: 'Cancelado' }
+  const filters = []
+  if (cpFilter.value !== 'all') filters.push(`Status: ${statusLabel[cpFilter.value] || cpFilter.value}`)
+  if (cpCatFilter.value !== 'all') filters.push(`Categoria: ${catLabel[cpCatFilter.value] || cpCatFilter.value}`)
+  if (cpDateFrom.value) filters.push(`De: ${fmtDate(cpDateFrom.value)}`)
+  if (cpDateTo.value) filters.push(`Até: ${fmtDate(cpDateTo.value)}`)
+  if (cpSearch.value) filters.push(`Busca: "${cpSearch.value}"`)
+  return {
+    title: 'Contas a Pagar',
+    subtitle: filters.length ? filters.join(' · ') : null,
+    headers: ['Emissão', 'Vencimento', 'Valor (R$)', 'Documento', 'Placa', 'Motorista', 'Fornecedor', 'Categoria', 'Status'],
+    rows: data.map(c => ({ type: 'row', data: [
+      fmtDate(c.issue_date),
+      fmtDate(c.due_date),
+      Number(c.value || 0),
+      c.description || c.document || '',
+      c.vehicle_plate || '',
+      c.driver_name || '',
+      c.supplier_name || '',
+      catLabel[c.category] || c.category || '',
+      statusLabel[c.status] || c.status || '',
+    ]})),
+    totalLabel: 'Total',
+    totalValue: data.reduce((s, c) => s + Number(c.value || 0), 0),
+    moneyCols: [2],
+  }
+}
+function handlePrint() { const d = buildExportData(); printTable({ ...d, totals: { label: d.totalLabel, value: d.totalValue } }) }
+function handleExcel() { exportExcelGeneric(buildExportData()) }
+function handleWord() { exportWordGeneric(buildExportData()) }
+
 onMounted(() => {
   fetchAll()
   fetchSummary()
@@ -334,7 +385,7 @@ onMounted(() => {
       <div class="glass rounded-[11px] py-3 px-[18px] mb-3.5 space-y-2.5">
         <div class="relative max-w-[440px]">
           <svg class="absolute left-3 top-2.5 text-stone-400" width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M9.5 3a6.5 6.5 0 104.1 11.54L19.05 20 20.5 18.55l-5.46-5.45A6.5 6.5 0 009.5 3zm0 2a4.5 4.5 0 110 9 4.5 4.5 0 010-9z"/></svg>
-          <input v-model="cpSearch" class="finput !pl-9 !py-2" placeholder="Buscar descrição, placa, motorista ou fornecedor..." />
+          <input v-model="cpSearch" class="finput !pl-9 !py-2" placeholder="Buscar por nota fiscal, valor, placa, motorista ou fornecedor..." />
         </div>
         <!-- linha 1: status + categoria -->
         <div class="flex gap-2 items-center flex-wrap">
@@ -351,16 +402,25 @@ onMounted(() => {
           <button class="sbtn" :class="{ on: cpCatFilter === 'administrativo' }" @click="cpCatFilter = 'administrativo'">Administrativo</button>
           <button class="sbtn" :class="{ on: cpCatFilter === 'multas' }" @click="cpCatFilter = 'multas'">Multas</button>
         </div>
-        <!-- linha 2: motorista + ordenação -->
+        <!-- linha 2: período + ordenação -->
         <div class="flex gap-2 items-center flex-wrap">
-          <span class="text-xs font-bold text-slate-500">MOTORISTA:</span>
-          <select v-model="cpDriverFilter" class="text-xs border border-stone-200 rounded-md px-2 py-1.5 min-w-[180px]">
-            <option value="">Todos os motoristas</option>
-            <option v-for="d in drivers" :key="d.id" :value="d.id">{{ d.name }}</option>
-          </select>
+          <span class="text-xs font-bold text-slate-500">PERÍODO:</span>
+          <input v-model="cpDateFrom" type="date" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
+          <span class="text-xs text-slate-400">até</span>
+          <input v-model="cpDateTo" type="date" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
           <button
-            v-if="cpDriverFilter"
-            @click="cpDriverFilter = ''"
+            v-if="cpDateFrom || cpDateTo"
+            @click="cpDateFrom = ''; cpDateTo = ''"
+            class="text-xs text-slate-400 hover:text-stone-600 underline"
+          >limpar</button>
+          <div class="w-px h-5 bg-stone-200" />
+          <span class="text-xs font-bold text-slate-500">EMISSÃO:</span>
+          <input v-model="cpIssueDateFrom" type="date" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
+          <span class="text-xs text-slate-400">até</span>
+          <input v-model="cpIssueDateTo" type="date" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
+          <button
+            v-if="cpIssueDateFrom || cpIssueDateTo"
+            @click="cpIssueDateFrom = ''; cpIssueDateTo = ''"
             class="text-xs text-slate-400 hover:text-stone-600 underline"
           >limpar</button>
           <div class="ml-auto flex gap-2 items-center">
@@ -368,15 +428,29 @@ onMounted(() => {
             <button class="sbtn" :class="{ on: cpSort === 'vencimento' }" @click="cpSort = 'vencimento'">Vencimento</button>
             <button class="sbtn" :class="{ on: cpSort === 'valor-desc' }" @click="cpSort = 'valor-desc'">↓ Valor</button>
             <button class="sbtn" :class="{ on: cpSort === 'valor-asc' }" @click="cpSort = 'valor-asc'">↑ Valor</button>
+            <div class="w-px h-5 bg-stone-200" />
+            <button @click="handlePrint" class="sbtn flex items-center gap-1" title="Imprimir / PDF">
+              <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+              PDF
+            </button>
+            <button @click="handleExcel" class="sbtn flex items-center gap-1" title="Exportar Excel">
+              <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm2-6h2.5l1.5-2.5L13.5 14H16l-3-4 3-4h-2.5L12 8.5 10.5 6H8l3 4-3 4z"/></svg>
+              Excel
+            </button>
+            <button @click="handleWord" class="sbtn flex items-center gap-1" title="Exportar Word">
+              <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm1-3h2l1.5-5L12 17h2l2.5-8h-2l-1.5 5-1.5-5h-2l-1.5 5-1.5-5H5l2.5 8z"/></svg>
+              Word
+            </button>
           </div>
         </div>
       </div>
 
       <!-- Table -->
-      <div class="glass rounded-xl overflow-hidden">
-        <table class="w-full border-collapse">
+      <div class="glass rounded-xl overflow-x-auto">
+        <table class="w-full border-collapse min-w-[900px]">
           <thead>
             <tr>
+              <th class="th">Emissão</th>
               <th class="th">Vencimento</th>
               <th class="th">Valor</th>
               <th class="th">Documento</th>
@@ -390,6 +464,7 @@ onMounted(() => {
           </thead>
           <tbody>
             <tr class="trow" v-for="c in pagedCP" :key="c.id">
+              <td class="td whitespace-nowrap text-xs text-stone-600">{{ fmtDate(c.issue_date) }}</td>
               <td class="td whitespace-nowrap">
                 <div class="font-semibold text-stone-800">{{ fmtDate(c.due_date) }}</div>
                 <span v-if="dueBadge(c.due_date, c.status)" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full" :class="dueBadge(c.due_date, c.status).cls">
@@ -397,7 +472,12 @@ onMounted(() => {
                 </span>
               </td>
               <td class="td font-extrabold text-stone-800 whitespace-nowrap">R$ {{ fmt(c.value) }}</td>
-              <td class="td text-xs max-w-[200px] truncate">{{ c.description || c.document || '—' }}</td>
+              <td class="td text-xs max-w-[220px]">
+                <div class="truncate">{{ c.description || '—' }}</div>
+                <div v-if="c.document" class="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
+                  NF {{ c.document }}
+                </div>
+              </td>
               <td class="td">
                 <span v-if="c.vehicle_plate" class="font-mono text-xs font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded">{{ c.vehicle_plate }}</span>
                 <span v-else class="text-slate-400 text-xs">—</span>
@@ -492,15 +572,23 @@ onMounted(() => {
             </button>
           </div>
           <div class="p-5 space-y-4">
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-3 gap-3">
               <div>
                 <label class="block text-xs font-bold text-stone-600 mb-1.5">Valor (R$) *</label>
                 <input v-model="editForm.value" type="number" step="0.01" min="0" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5">Emissão</label>
+                <input v-model="editForm.issue_date" type="date" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
                 <label class="block text-xs font-bold text-stone-600 mb-1.5">Vencimento *</label>
                 <input v-model="editForm.due_date" type="date" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">Nota Fiscal (nº)</label>
+              <input v-model="editForm.document" type="text" placeholder="Ex: 148.587" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label class="block text-xs font-bold text-stone-600 mb-1.5">Descrição</label>
@@ -614,6 +702,10 @@ onMounted(() => {
               </span>
             </div>
             <div>
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Emissão</div>
+              <div class="text-sm font-semibold text-slate-800">{{ fmtDate(viewingPayable.issue_date) }}</div>
+            </div>
+            <div>
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Vencimento</div>
               <div class="text-sm font-semibold text-slate-800">{{ fmtDate(viewingPayable.due_date) }}</div>
             </div>
@@ -630,7 +722,11 @@ onMounted(() => {
             </div>
             <div class="col-span-2">
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Descrição</div>
-              <div class="text-sm text-slate-800">{{ viewingPayable.description || viewingPayable.document || '—' }}</div>
+              <div class="text-sm text-slate-800">{{ viewingPayable.description || '—' }}</div>
+            </div>
+            <div v-if="viewingPayable.document" class="col-span-2">
+              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Nota Fiscal (nº)</div>
+              <div class="text-sm font-semibold text-purple-700">{{ viewingPayable.document }}</div>
             </div>
             <div>
               <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Motorista</div>

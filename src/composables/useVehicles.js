@@ -30,11 +30,15 @@ export function useVehicles() {
     return res
   }
 
+  async function fetchOne(id) {
+    return api.get(`/vehicles/${id}`)
+  }
+
   async function remove(id) {
     const res = await api.delete(`/vehicles/${id}`)
     await fetchAll()
     return res
   }
 
-  return { vehicles, trucks, trailers, loading, fetchAll, create, update, remove }
+  return { vehicles, trucks, trailers, loading, fetchAll, fetchOne, create, update, remove }
 }

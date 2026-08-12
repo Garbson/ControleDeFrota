@@ -4,6 +4,8 @@ import { useFines } from '../../composables/useFines'
 import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
 import { useConfirm } from '../../composables/useConfirm'
+import { printTable } from '../../utils/printTable'
+import { exportExcelGeneric, exportWordGeneric } from '../../utils/exportTable'
 import TableFooter from '../ui/TableFooter.vue'
 
 const props = defineProps({ showToast: Function })
@@ -154,6 +156,31 @@ async function del(fine) {
   props.showToast?.('✅ Multa removida')
 }
 
+function buildExportData() {
+  const data = filtered.value
+  const statusLabel = { pendente: 'Pendente', pago: 'Pago', recurso: 'Em recurso' }
+  return {
+    title: 'Multas',
+    subtitle: statusFilter.value !== 'all' ? `Status: ${statusLabel[statusFilter.value]}` : null,
+    headers: ['Data', 'Vencimento', 'Valor (R$)', 'Placa', 'Motorista', 'Descrição', 'Status'],
+    rows: data.map(f => ({ type: 'row', data: [
+      fmtDate(f.fine_date),
+      fmtDate(f.due_date),
+      Number(f.value || 0),
+      f.vehicle_plate || '',
+      f.driver_name || '',
+      f.description || '',
+      statusLabel[f.status] || f.status || '',
+    ]})),
+    totalLabel: 'Total',
+    totalValue: data.reduce((s, f) => s + Number(f.value || 0), 0),
+    moneyCols: [2],
+  }
+}
+function handlePrint() { const d = buildExportData(); printTable({ ...d, totals: { label: d.totalLabel, value: d.totalValue } }) }
+function handleExcel() { exportExcelGeneric(buildExportData()) }
+function handleWord() { exportWordGeneric(buildExportData()) }
+
 onMounted(async () => {
   await Promise.all([fetchAll(), fetchSummary(), fetchDrivers(), fetchVehicles(), fetchDescriptions()])
 })
@@ -204,6 +231,13 @@ onMounted(async () => {
           class="text-xs rounded-md px-2 py-1.5 min-w-[160px] outline-none"
           style="background:white;border:1px solid rgba(0,0,0,0.12);color:#1c1917;"
         />
+        <div class="w-px h-5 bg-stone-200" />
+        <button @click="handlePrint" class="sbtn flex items-center gap-1" title="Imprimir / PDF">
+          <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+          PDF
+        </button>
+        <button @click="handleExcel" class="sbtn flex items-center gap-1" title="Exportar Excel">Excel</button>
+        <button @click="handleWord" class="sbtn flex items-center gap-1" title="Exportar Word">Word</button>
       </div>
       <button
         @click="showModal = true"

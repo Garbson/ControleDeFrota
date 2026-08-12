@@ -71,39 +71,65 @@ router.get('/summary', async (req, res) => {
 router.post(
   '/',
   [
-    body('value').isFloat({ gt: 0 }),
-    body('due_date').isDate(),
     body('client').notEmpty().withMessage('Cliente obrigatório'),
   ],
   async (req, res) => {
     const errors = validationResult(req)
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() })
 
-    const { document, description, client, driver_id, vehicle_id, type, value, issue_date, due_date, obs } = req.body
+    const { document, description, carga, client, driver_id, vehicle_id, type, value, issue_date, due_date, obs, weight, unit_price, installments } = req.body
     try {
-      const result = await query(
-        `INSERT INTO accounts_receivable
-          (document, description, client, driver_id, vehicle_id, type, value, issue_date, due_date, obs)
-         VALUES (?,?,?,?,?,?,?,?,?,?)`,
-        [document || null, description || null, client, driver_id || null,
-         vehicle_id || null, type || 'frete', value, issue_date || null, due_date, obs || null]
-      )
-      res.status(201).json({ id: result.insertId, message: 'Conta criada' })
+      const ids = []
+      if (installments?.length) {
+        const groupId = Date.now()
+        const totalParcelas = installments.filter(i => !i.is_entrada).length
+        let parcelaNum = 0
+        for (const inst of installments) {
+          if (!inst.amount || !inst.due_date) continue
+          let label = null
+          if (inst.is_entrada) {
+            label = 'Entrada'
+          } else {
+            parcelaNum++
+            label = totalParcelas > 1 ? `Parcela ${parcelaNum}/${totalParcelas}` : 'Parcela'
+          }
+          const result = await query(
+            `INSERT INTO accounts_receivable
+              (document, description, carga, client, driver_id, vehicle_id, type, value, issue_date, due_date, obs, weight, unit_price, group_id, installment_label)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [document || null, description || null, carga || null, client, driver_id || null,
+             vehicle_id || null, type || 'frete', inst.amount, issue_date || null, inst.due_date, obs || null, weight || null, unit_price || null, groupId, label]
+          )
+          ids.push(result.insertId)
+        }
+      } else {
+        const result = await query(
+          `INSERT INTO accounts_receivable
+            (document, description, carga, client, driver_id, vehicle_id, type, value, issue_date, due_date, obs, weight, unit_price)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [document || null, description || null, carga || null, client, driver_id || null,
+           vehicle_id || null, type || 'frete', value, issue_date || null, due_date, obs || null, weight || null, unit_price || null]
+        )
+        ids.push(result.insertId)
+      }
+      res.status(201).json({ ids, message: 'Conta criada' })
     } catch (err) {
+      console.error('[receivable:create]', err.message)
       res.status(500).json({ error: 'Erro ao criar conta' })
     }
   }
 )
 
 router.put('/:id', async (req, res) => {
-  const { document, description, client, driver_id, vehicle_id, type, value, issue_date, due_date, obs } = req.body
+  const { document, description, carga, client, driver_id, vehicle_id, type, value, issue_date, due_date, obs, weight, unit_price } = req.body
   try {
     await query(
-      `UPDATE accounts_receivable SET document=?, description=?, client=?, driver_id=?, vehicle_id=?, type=?, value=?, issue_date=?, due_date=?, obs=? WHERE id=?`,
-      [document || null, description || null, client, driver_id || null, vehicle_id || null, type || 'frete', value, issue_date || null, due_date, obs || null, req.params.id]
+      `UPDATE accounts_receivable SET document=?, description=?, carga=?, client=?, driver_id=?, vehicle_id=?, type=?, value=?, issue_date=?, due_date=?, obs=?, weight=?, unit_price=? WHERE id=?`,
+      [document || null, description || null, carga || null, client, driver_id || null, vehicle_id || null, type || 'frete', value, issue_date || null, due_date, obs || null, weight || null, unit_price || null, req.params.id]
     )
     res.json({ message: 'Conta atualizada' })
   } catch (err) {
+    console.error('[receivable:update]', err.message)
     res.status(500).json({ error: 'Erro ao atualizar conta' })
   }
 })
@@ -123,7 +149,12 @@ router.patch('/:id/receive', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    await query('DELETE FROM accounts_receivable WHERE id = ?', [req.params.id])
+    const [row] = await query('SELECT group_id FROM accounts_receivable WHERE id = ?', [req.params.id])
+    if (row?.group_id && req.query.group === 'true') {
+      await query('DELETE FROM accounts_receivable WHERE group_id = ?', [row.group_id])
+    } else {
+      await query('DELETE FROM accounts_receivable WHERE id = ?', [req.params.id])
+    }
     res.json({ message: 'Removido' })
   } catch (err) {
     res.status(500).json({ error: 'Erro ao remover' })

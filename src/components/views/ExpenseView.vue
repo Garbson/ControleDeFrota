@@ -13,7 +13,7 @@ const { suppliers, fetchAll: fetchSuppliers, create: createSupplier } = useSuppl
 const { uploadInvoice } = usePayable()
 
 const today = new Date().toISOString().split('T')[0]
-const form = ref({ driver_id: '', type: '', qty: 1, value: '', date: today, due_date: today, description: '', obs: '', plate: '', vehicle_id: '', supplier_id: '', supplier_name_free: null })
+const form = ref({ driver_id: '', type: '', qty: 1, value: '', date: today, due_date: today, document: '', description: '', obs: '', plate: '', vehicle_id: '', supplier_id: '', supplier_name_free: null })
 const invoiceFile = ref(null)
 const invoicePreview = ref('')
 const invoiceInput = ref(null)
@@ -210,7 +210,8 @@ async function submitExpense() {
       for (let i = 0; i < total; i++) {
         const p = customParcelas.value[i]
         const created = await api.post('/payable', {
-          category, description: `${description} (${i + 1}/${total})`,
+          category, document: form.value.document || null,
+          description: `${description} (${i + 1}/${total})`,
           driver_id: driverId, issue_date: form.value.date || null,
           value: Number(Number(p.value).toFixed(2)), due_date: p.date, obs: form.value.obs || null,
           vehicle_id: form.value.vehicle_id || null,
@@ -222,7 +223,7 @@ async function submitExpense() {
       successMessage = `✅ ${total} parcelas lançadas para ${formDriverName.value}`
     } else {
       const created = await api.post('/payable', {
-        category, description, driver_id: driverId,
+        category, document: form.value.document || null, description, driver_id: driverId,
         issue_date: form.value.date || null, value: Number(form.value.value),
         due_date: form.value.due_date || form.value.date, obs: form.value.obs || null,
         vehicle_id: form.value.vehicle_id || null,
@@ -256,7 +257,7 @@ async function submitExpense() {
 }
 
 function resetForm() {
-  form.value = { driver_id: '', type: '', qty: 1, value: '', date: today, due_date: today, description: '', obs: '', plate: '', vehicle_id: '', supplier_id: '', supplier_name_free: null }
+  form.value = { driver_id: '', type: '', qty: 1, value: '', date: today, due_date: today, document: '', description: '', obs: '', plate: '', vehicle_id: '', supplier_id: '', supplier_name_free: null }
   plateInput.value = ''
   supplierSearch.value = ''
   clearInvoice()
@@ -346,6 +347,11 @@ onMounted(() => {
             <label class="flabel">1º Vencimento</label>
             <input v-model="form.due_date" type="date" class="finput" />
             <p class="text-[10px] text-slate-400 mt-1">Se vazio, usa a data da despesa</p>
+          </div>
+
+          <div>
+            <label class="flabel">Nota Fiscal (nº) <span class="font-normal normal-case text-slate-400">(opcional)</span></label>
+            <input v-model="form.document" placeholder="Ex: 148.587" class="finput" />
           </div>
 
           <div>
@@ -508,6 +514,7 @@ onMounted(() => {
             <div class="flex gap-1.5"><span class="text-slate-400">Tipo:</span><strong class="text-stone-600">{{ expenseTypes[form.type] }}</strong></div>
             <div class="flex gap-1.5"><span class="text-slate-400">{{ parcelar ? 'Total' : 'Valor' }}:</span><strong class="text-blue-600">R$ {{ Number(form.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) }}</strong><span v-if="parcelar && customParcelas.length" class="text-slate-400">({{ customParcelas.length }}×)</span></div>
             <div v-if="formSupplierName" class="flex gap-1.5"><span class="text-slate-400">Fornecedor:</span><strong class="text-stone-600">{{ formSupplierName }}</strong></div>
+            <div v-if="form.document" class="flex gap-1.5"><span class="text-slate-400">NF:</span><strong class="text-stone-600">{{ form.document }}</strong></div>
           </div>
         </div>
 

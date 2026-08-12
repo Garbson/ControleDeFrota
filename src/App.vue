@@ -27,18 +27,21 @@ const VehiclesView = defineAsyncComponent(() => import("./components/views/Vehic
 
 const { isAuthenticated, fetchMe, logout } = useAuth();
 
-const currentView = ref("dashboard");
+const currentView = ref(sessionStorage.getItem("currentView") || "dashboard");
 const authChecked = ref(false);
 
 function navigate(view) {
   currentView.value = view;
+  sessionStorage.setItem("currentView", view);
 }
 
 function onLogin() {
   currentView.value = "dashboard";
+  sessionStorage.setItem("currentView", "dashboard");
 }
 
 async function handleLogout() {
+  sessionStorage.removeItem("currentView");
   await logout();
 }
 

@@ -6,10 +6,12 @@ import { useVehicles } from '../../composables/useVehicles'
 import { api } from '../../composables/useApi'
 import KPICard from '../ui/KPICard.vue'
 import { useConfirm } from '../../composables/useConfirm'
+import { printTable } from '../../utils/printTable'
+import { exportExcelGeneric, exportWordGeneric } from '../../utils/exportTable'
 
 const props = defineProps({ showToast: Function })
 
-const { items, movements, loading, fetchAll, fetchMovements, createMovement, remove, removeMovement } = useStock()
+const { items, movements, loading, fetchAll, fetchMovements, createMovement, remove, removeMovement, uploadInvoice, deleteInvoice } = useStock()
 const { drivers, fetchAll: fetchDrivers } = useDrivers()
 const { vehicles, fetchAll: fetchVehicles } = useVehicles()
 const { confirmAction } = useConfirm()
@@ -62,6 +64,41 @@ const entryForm = ref({
   obs: '',
 })
 const entrySaving = ref(false)
+
+// ── Upload de NF no modal de entrada
+const entryInvoiceFile = ref(null)
+const entryInvoicePreview = ref('')
+const entryInvoiceInput = ref(null)
+
+function selectEntryInvoice() {
+  entryInvoiceInput.value?.click()
+}
+
+function onEntryInvoiceSelected(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  const isImage = /^image\/(jpeg|png|webp)$/i.test(file.type)
+  if (file.size > (isImage ? 30 : 10) * 1024 * 1024) {
+    props.showToast?.(`❌ ${isImage ? 'A imagem deve ter no máximo 30 MB' : 'O PDF deve ter no máximo 10 MB'}`)
+    return
+  }
+  if (!/\.(jpg|jpeg|png|pdf|webp)$/i.test(file.name)) {
+    props.showToast?.('❌ Formato inválido. Use JPG, PNG, WEBP ou PDF')
+    return
+  }
+  if (entryInvoicePreview.value) URL.revokeObjectURL(entryInvoicePreview.value)
+  entryInvoiceFile.value = file
+  entryInvoicePreview.value = isImage ? URL.createObjectURL(file) : ''
+}
+
+function clearEntryInvoice() {
+  if (entryInvoicePreview.value) URL.revokeObjectURL(entryInvoicePreview.value)
+  entryInvoicePreview.value = ''
+  entryInvoiceFile.value = null
+}
+
+const entryFileSize = computed(() => entryInvoiceFile.value ? `${(entryInvoiceFile.value.size / 1024 / 1024).toFixed(2)} MB` : '')
 
 const totalStock = computed(() => items.value.reduce((s, i) => s + Number(i.qty), 0))
 const novosPneus = computed(() => items.value.filter(s => s.status === 'novo').reduce((a, s) => a + Number(s.qty), 0))
@@ -131,6 +168,7 @@ function openEntry() {
     obs: '',
   }
   entryMode.value = 'existing'
+  clearEntryInvoice()
   showEntryModal.value = true
 }
 
@@ -180,8 +218,17 @@ async function confirmEntry() {
       obs: entryForm.value.obs || null,
     })
 
-    const item = items.value.find(i => i.id == stockItemId)
-    props.showToast?.(`✅ Entrada registrada: ${entryForm.value.qty} pneus de ${item?.description || 'novo item'}`)
+    let successMsg = `✅ Entrada registrada: ${entryForm.value.qty} pneus`
+    if (entryInvoiceFile.value) {
+      try {
+        await uploadInvoice(stockItemId, entryInvoiceFile.value)
+        successMsg += ' com nota fiscal'
+      } catch {
+        props.showToast?.('⚠️ Entrada salva, mas a nota fiscal não foi enviada')
+      }
+    }
+    props.showToast?.(successMsg)
+    clearEntryInvoice()
     showEntryModal.value = false
   } catch (e) {
     props.showToast?.('❌ Erro ao registrar entrada')
@@ -190,11 +237,77 @@ async function confirmEntry() {
   }
 }
 
+// ── Upload de Nota Fiscal
+const invoiceUploading = ref(null)
+const invoiceInput = ref(null)
+const invoiceTarget = ref(null)
+const viewingInvoice = ref(null)
+
+function triggerInvoiceUpload(item) {
+  invoiceTarget.value = item
+  invoiceInput.value?.click()
+}
+
+async function handleInvoiceFile(e) {
+  const file = e.target.files?.[0]
+  if (!file || !invoiceTarget.value) return
+  invoiceUploading.value = invoiceTarget.value.id
+  try {
+    await uploadInvoice(invoiceTarget.value.id, file)
+    props.showToast?.('✅ Nota fiscal enviada')
+  } catch {
+    props.showToast?.('❌ Erro ao enviar nota fiscal')
+  } finally {
+    invoiceUploading.value = null
+    invoiceTarget.value = null
+    e.target.value = ''
+  }
+}
+
+async function handleDeleteInvoice(item) {
+  if (!await confirmAction({ title: 'Remover nota fiscal', message: `Remover a nota fiscal de "${item.description}"?`, confirmText: 'Remover' })) return
+  try {
+    await deleteInvoice(item.id)
+    props.showToast?.('Nota fiscal removida')
+  } catch {
+    props.showToast?.('❌ Erro ao remover nota fiscal')
+  }
+}
+
+function invoiceUrl(item) {
+  return item.invoice_access_url || item.invoice_url || null
+}
+
 const fmtValue = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
 function fmtDate(raw) {
   if (!raw) return '—'
   return new Date(raw).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
 }
+
+function buildExportData() {
+  const statusLabel = { novo: 'Novo', recapado: 'Recapado', usado: 'Usado' }
+  return {
+    title: 'Estoque de Pneus',
+    subtitle: sFilter.value !== 'all' ? `Filtro: ${statusLabel[sFilter.value]}` : null,
+    headers: ['Descrição', 'Marca', 'NF', 'Status', 'Qtd', 'Preço Un.', 'Fornecedor', 'Entrada'],
+    rows: filteredStock.value.map(s => ({ type: 'row', data: [
+      s.description,
+      s.brand || '',
+      s.nf_number || '',
+      statusLabel[s.status] || s.status,
+      Number(s.qty),
+      Number(s.unit_price || 0),
+      s.supplier_name || '',
+      fmtDate(s.entry_date),
+    ]})),
+    totalLabel: 'Total de itens',
+    totalValue: filteredStock.value.reduce((s, i) => s + Number(i.qty), 0),
+    moneyCols: [5],
+  }
+}
+function handlePrint() { const d = buildExportData(); printTable({ ...d, totals: { label: d.totalLabel, value: d.totalValue } }) }
+function handleExcel() { exportExcelGeneric(buildExportData()) }
+function handleWord() { exportWordGeneric(buildExportData()) }
 
 onMounted(() => {
   fetchAll()
@@ -231,8 +344,18 @@ onMounted(() => {
         <button class="sbtn" :class="{ on: sSort === 'qty-desc' }" @click="sSort = 'qty-desc'">↓ Maior qtd</button>
         <button class="sbtn" :class="{ on: sSort === 'qty-asc' }" @click="sSort = 'qty-asc'">↑ Menor qtd</button>
         <button class="sbtn" :class="{ on: sSort === 'date' }" @click="sSort = 'date'">Data</button>
+        <div class="w-px h-5 bg-stone-200" />
+        <button @click="handlePrint" class="sbtn flex items-center gap-1" title="Imprimir / PDF">
+          <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+          PDF
+        </button>
+        <button @click="handleExcel" class="sbtn flex items-center gap-1" title="Exportar Excel">Excel</button>
+        <button @click="handleWord" class="sbtn flex items-center gap-1" title="Exportar Word">Word</button>
       </div>
     </div>
+
+    <!-- Hidden file input para NF -->
+    <input ref="invoiceInput" type="file" accept="image/*,.pdf" class="hidden" @change="handleInvoiceFile" />
 
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center py-10 text-slate-400 text-sm">Carregando...</div>
@@ -275,8 +398,30 @@ onMounted(() => {
               </div>
             </td>
             <td class="td">
-              <span v-if="s.nf_number" class="font-mono text-[11.5px] bg-stone-100/70 px-2 py-[3px] rounded-[5px] text-stone-600 font-bold">NF {{ s.nf_number }}</span>
-              <span v-else class="text-slate-400 text-xs">—</span>
+              <div class="flex items-center gap-1.5">
+                <span v-if="s.nf_number" class="font-mono text-[11.5px] bg-stone-100/70 px-2 py-[3px] rounded-[5px] text-stone-600 font-bold">NF {{ s.nf_number }}</span>
+                <span v-else class="text-slate-400 text-xs">—</span>
+                <!-- Botão upload NF -->
+                <button
+                  v-if="!invoiceUrl(s)"
+                  @click.stop="triggerInvoiceUpload(s)"
+                  :disabled="invoiceUploading === s.id"
+                  title="Anexar nota fiscal"
+                  class="text-purple-600 bg-purple-50 hover:bg-purple-100 p-1 rounded-md transition-colors inline-flex"
+                >
+                  <svg v-if="invoiceUploading === s.id" class="animate-spin" width="13" height="13" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity=".3"/><path fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+                  <svg v-else width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zm-6-4.5v3h-2v-3H8l4-4 4 4h-2z"/></svg>
+                </button>
+                <!-- Botões ver/excluir NF -->
+                <template v-if="invoiceUrl(s)">
+                  <a :href="invoiceUrl(s)" target="_blank" title="Ver nota fiscal" class="text-purple-600 bg-purple-50 hover:bg-purple-100 p-1 rounded-md transition-colors inline-flex">
+                    <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
+                  </a>
+                  <button @click.stop="handleDeleteInvoice(s)" title="Remover nota fiscal" class="text-red-500 bg-red-50 hover:bg-red-100 p-1 rounded-md transition-colors inline-flex">
+                    <svg width="11" height="11" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                  </button>
+                </template>
+              </div>
             </td>
             <td class="td text-slate-500 text-xs">{{ fmtDate(s.entry_date) }}</td>
             <td class="td text-center">
@@ -396,7 +541,7 @@ onMounted(() => {
     <!-- Entry Modal -->
     <Teleport to="body">
       <div v-if="showEntryModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" @click.self="showEntryModal = false">
-        <div class="glass-strong rounded-xl w-[480px]">
+        <div class="glass-strong rounded-xl w-[680px] max-h-[90vh] overflow-y-auto">
           <div class="bg-gradient-to-br from-green-700 to-green-900 px-6 py-5 rounded-t-xl">
             <h3 class="m-0 text-[15px] font-bold text-white">📦 Nova Entrada de Pneus</h3>
             <p class="mt-1 mb-0 text-xs text-green-200">Registrar entrada no estoque</p>
@@ -487,7 +632,7 @@ onMounted(() => {
               </div>
             </div>
 
-            <!-- Campos comuns (qtd, data, obs) -->
+            <!-- Campos comuns (qtd, data, NF, obs) -->
             <div class="space-y-4 mt-4 pt-4 border-t border-stone-100">
               <div class="grid grid-cols-2 gap-3">
                 <div>
@@ -497,6 +642,30 @@ onMounted(() => {
                 <div>
                   <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Data</label>
                   <input v-model="entryForm.mov_date" type="date" class="finput" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nota Fiscal <span class="font-normal normal-case text-slate-400">(imagem ou PDF)</span></label>
+                <input ref="entryInvoiceInput" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" class="hidden" @change="onEntryInvoiceSelected" />
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed transition-colors cursor-pointer text-left"
+                    :class="entryInvoiceFile ? 'border-purple-300 bg-purple-50 text-purple-700' : 'border-stone-300 bg-stone-50/60 text-stone-500 hover:bg-stone-100'"
+                    @click="selectEntryInvoice"
+                  >
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" class="flex-shrink-0"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm1 7V3.5L18.5 9H15zm-4 9H9v-4H6l4-4 4 4h-3v4z"/></svg>
+                    <img v-if="entryInvoicePreview" :src="entryInvoicePreview" class="h-9 w-9 rounded-md object-cover" alt="Prévia" />
+                    <span class="min-w-0"><span class="block truncate text-[12px] font-semibold">{{ entryInvoiceFile ? entryInvoiceFile.name : 'Selecionar arquivo da nota fiscal' }}</span><small v-if="entryInvoiceFile" class="block text-[10px] opacity-70">{{ entryFileSize }} · pronta para enviar</small></span>
+                  </button>
+                  <button
+                    v-if="entryInvoiceFile"
+                    type="button"
+                    class="px-3 py-2.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 text-[12px] font-semibold cursor-pointer border border-red-100"
+                    @click="clearEntryInvoice"
+                  >
+                    Remover
+                  </button>
                 </div>
               </div>
               <div>
