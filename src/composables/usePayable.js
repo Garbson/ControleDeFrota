@@ -1,6 +1,7 @@
 import { ref } from 'vue'
-import { api } from './useApi'
 import { optimizeUploadImage } from '../utils/imageUpload'
+import { api } from './useApi'
+
 
 const items = ref([])
 const summary = ref({ total: 0, pendente: 0, pago: 0, vencido: 0 })
@@ -11,10 +12,10 @@ export function usePayable() {
     loading.value = true
     try {
       const params = new URLSearchParams()
-      if (filters.status)   params.set('status', filters.status)
+      if (filters.status) params.set('status', filters.status)
       if (filters.category) params.set('category', filters.category)
-      if (filters.from)     params.set('from', filters.from)
-      if (filters.to)       params.set('to', filters.to)
+      if (filters.from) params.set('from', filters.from)
+      if (filters.to) params.set('to', filters.to)
       const qs = params.toString()
       items.value = await api.get(`/payable${qs ? '?' + qs : ''}`)
     } finally {
@@ -101,5 +102,14 @@ export function usePayable() {
     return res
   }
 
-  return { items, summary, loading, fetchAll, fetchSummary, create, markPaid, update, remove, uploadReceipt, deleteReceipt, uploadInvoice, deleteInvoice }
+  async function fetchExpenses(filters = {}) {
+    const params = new URLSearchParams()
+    if (filters.vehicle_id) params.set('vehicle_id', filters.vehicle_id)
+    if (filters.driver_id) params.set('driver_id', filters.driver_id)
+    const qs = params.toString()
+    return api.get(`/payable${qs ? '?' + qs : ''}`)
+    console.log(api.get)
+  }
+
+  return { items, summary, loading, fetchAll, fetchSummary, create, markPaid, update, remove, uploadReceipt, deleteReceipt, uploadInvoice, deleteInvoice, fetchExpenses }
 }

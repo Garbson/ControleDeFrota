@@ -74,10 +74,12 @@ router.get('/', async (req, res) => {
     `
     const params = []
 
-    if (status)   { sql += ' AND ap.status = ?';   params.push(status) }
+    if (status) { sql += ' AND ap.status = ?'; params.push(status) }
     if (category) { sql += ' AND ap.category = ?'; params.push(category) }
-    if (from)     { sql += ' AND ap.due_date >= ?'; params.push(from) }
-    if (to)       { sql += ' AND ap.due_date <= ?'; params.push(to) }
+    if (from) { sql += ' AND ap.due_date >= ?'; params.push(from) }
+    if (to) { sql += ' AND ap.due_date <= ?'; params.push(to) }
+    if (req.query.vehicle_id) { sql += ' AND ap.vehicle_id = ?'; params.push(req.query.vehicle_id) }
+    if (req.query.driver_id) { sql += ' AND ap.driver_id = ?'; params.push(req.query.driver_id) }
 
     sql += ' ORDER BY ap.due_date ASC'
 
@@ -133,7 +135,7 @@ router.post(
           (document, description, supplier_id, supplier_name_free, driver_id, vehicle_id, trip_id, category, value, issue_date, due_date, obs)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [document || null, description || null, supplier_id || null, resolvedFree,
-         driver_id || null, vehicle_id || null, resolvedTripId || null, category, value, issue_date || null, due_date, obs || null]
+        driver_id || null, vehicle_id || null, resolvedTripId || null, category, value, issue_date || null, due_date, obs || null]
       )
       res.status(201).json({ id: result.insertId, message: 'Conta criada' })
     } catch (err) {
@@ -172,7 +174,7 @@ router.put('/:id', async (req, res) => {
         category=?, value=?, issue_date=?, due_date=?, status=?, obs=?
        WHERE id=?`,
       [document || null, description || null, supplier_id || null, resolvedFree, driver_id || null,
-       vehicle_id || null, trip_id || null, category, value, issue_date || null, due_date, status, obs || null, req.params.id]
+      vehicle_id || null, trip_id || null, category, value, issue_date || null, due_date, status, obs || null, req.params.id]
     )
     if (status === 'pago') {
       await query("UPDATE fines SET status='pago', paid_date=COALESCE(paid_date, CURDATE()) WHERE account_payable_id=?", [req.params.id])
@@ -219,7 +221,7 @@ router.post('/:id/receipt', upload.single('receipt'), async (req, res) => {
     const file = await storedFileResponse(storedReference)
     res.json({ receipt_url: file.reference, receipt_access_url: file.access_url, message: 'Comprovante enviado' })
   } catch (err) {
-    await removeStoredFile(storedReference || localReference).catch(() => {})
+    await removeStoredFile(storedReference || localReference).catch(() => { })
     console.error('[receipt:upload]', err.message)
     res.status(500).json({ error: 'Erro ao salvar comprovante' })
   }
@@ -254,7 +256,7 @@ router.post('/:id/invoice', invoiceUpload.single('invoice'), async (req, res) =>
     const file = await storedFileResponse(storedReference)
     res.json({ invoice_url: file.reference, invoice_access_url: file.access_url, message: 'Nota fiscal enviada' })
   } catch (err) {
-    await removeStoredFile(storedReference || localReference).catch(() => {})
+    await removeStoredFile(storedReference || localReference).catch(() => { })
     console.error('[invoice:upload]', err.message)
     res.status(500).json({ error: 'Erro ao salvar nota fiscal' })
   }
@@ -271,5 +273,8 @@ router.delete('/:id/invoice', async (req, res) => {
     res.status(500).json({ error: 'Erro ao remover nota fiscal' })
   }
 })
+
+
+
 
 module.exports = router

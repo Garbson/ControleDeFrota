@@ -113,6 +113,7 @@ router.get('/movements', async (req, res) => {
     `
     const params = []
     if (type) { sql += ' AND m.type = ?'; params.push(type) }
+    if (req.query.stock_item_id) { sql += ' AND m.stock_item_id = ?'; params.push(req.query.stock_item_id) }
     sql += ' ORDER BY m.mov_date DESC LIMIT 50'
     res.json(await query(sql, params))
   } catch (err) {

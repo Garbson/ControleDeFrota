@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useDrivers } from '../../composables/useDrivers'
 import { useVehicles } from '../../composables/useVehicles'
+import { usePayable } from '../../composables/usePayable'
 import { api } from '../../composables/useApi'
 import { useConfirm } from '../../composables/useConfirm'
 
@@ -9,7 +10,52 @@ const props = defineProps({ showToast: Function })
 
 const { drivers, loading, fetchAll, fetchOne, remove } = useDrivers()
 const { vehicles, fetchAll: fetchVehicles } = useVehicles()
+const { fetchExpenses } = usePayable()
 const { confirmAction } = useConfirm()
+
+const showExpenses = ref(false)
+const despesas = ref([])
+const expenseDriverName = ref('')
+const expCurrentPage = ref(1)
+const expPerPage = 10
+const expCategoryFilter = ref('')
+const expSearchFilter = ref('')
+
+const expFilteredDespesas = computed(() => {
+  let list = despesas.value
+  if (expCategoryFilter.value) {
+    list = list.filter(d => d.category === expCategoryFilter.value)
+  }
+  if (expSearchFilter.value) {
+    const q = expSearchFilter.value.toLowerCase()
+    list = list.filter(d =>
+      (d.description || '').toLowerCase().includes(q) ||
+      (d.supplier_name || '').toLowerCase().includes(q) ||
+      (d.supplier_name_free || '').toLowerCase().includes(q)
+    )
+  }
+  return list
+})
+
+const despesasTotal = computed(() => expFilteredDespesas.value.reduce((s, d) => s + Number(d.value || 0), 0))
+const expPaginatedItems = computed(() => {
+  const start = (expCurrentPage.value - 1) * expPerPage
+  return expFilteredDespesas.value.slice(start, start + expPerPage)
+})
+const expTotalPages = computed(() => Math.ceil(expFilteredDespesas.value.length / expPerPage))
+
+function fmt(v) {
+  return Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+async function openDriverExpenses(driver) {
+  expenseDriverName.value = driver.name
+  expCurrentPage.value = 1
+  expCategoryFilter.value = ''
+  expSearchFilter.value = ''
+  despesas.value = await fetchExpenses({ driver_id: driver.id })
+  showExpenses.value = true
+}
 
 const dSort = ref('tires-desc')
 const dFilter = ref('all')
@@ -168,8 +214,8 @@ onMounted(() => {
       </div>
 
       <!-- Table -->
-      <div class="glass rounded-xl overflow-hidden">
-        <div class="grid grid-cols-[2fr_1fr_1fr_80px_1fr_110px_90px] gap-2 px-[18px] py-2.5 border-b border-stone-200">
+      <div class="glass rounded-xl overflow-x-auto">
+        <div class="grid grid-cols-[2fr_1fr_1fr_80px_1fr_110px_90px] min-w-[700px] gap-2 px-[18px] py-2.5 border-b border-stone-200">
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Motorista</div>
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Cavalo</div>
           <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Carreta / Reboque</div>
@@ -228,6 +274,13 @@ onMounted(() => {
               class="text-stone-600 bg-stone-100/70 hover:bg-stone-100 p-1.5 rounded-md transition-colors"
             >
               <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            </button>
+            <button
+              @click.stop="openDriverExpenses(d)"
+              title="Despesas"
+              class="text-stone-600 bg-stone-100/70 hover:bg-stone-100 p-1.5 rounded-md transition-colors"
+            >
+              <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
             </button>
             <button
               @click.stop="openEditDriver(d)"
@@ -468,6 +521,108 @@ onMounted(() => {
             >
               {{ vehicleSaving ? 'Salvando...' : 'Confirmar Troca' }}
             </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+    <!-- Modal Despesas do Motorista -->
+    <Teleport to="body">
+      <div
+        v-if="showExpenses"
+        class="fixed inset-0 z-[90] flex items-center justify-center p-4"
+        @click.self="showExpenses = false"
+      >
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="showExpenses = false" />
+        <div class="relative glass-strong rounded-2xl w-full max-w-[960px] overflow-hidden">
+          <div class="px-7 py-5 bg-gradient-to-br from-[#1a1f2e] to-[#1e293b] flex items-center justify-between">
+            <div>
+              <h3 class="m-0 text-[15px] font-bold text-white">Despesas do Motorista</h3>
+              <p class="mt-0.5 mb-0 text-xs text-slate-400">{{ expenseDriverName }} · {{ despesas.length }} registro{{ despesas.length !== 1 ? 's' : '' }}</p>
+            </div>
+            <div class="flex items-center gap-4">
+              <div class="text-right">
+                <div class="text-[10px] text-slate-400 uppercase font-bold">Total</div>
+                <div class="text-white font-extrabold text-sm">R$ {{ fmt(despesasTotal) }}</div>
+              </div>
+              <button @click="showExpenses = false" class="text-slate-400 hover:text-white transition-colors">
+                <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="px-7 py-3 border-b border-stone-100 flex items-center gap-3 flex-wrap">
+            <input v-model="expSearchFilter" @input="expCurrentPage = 1" type="text" placeholder="Buscar descrição ou fornecedor..." class="finput max-w-[260px] text-xs" />
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <button class="sbtn" :class="{ on: !expCategoryFilter }" @click="expCategoryFilter = ''; expCurrentPage = 1">Todos</button>
+              <button class="sbtn" :class="{ on: expCategoryFilter === 'manutencao' }" @click="expCategoryFilter = 'manutencao'; expCurrentPage = 1">Manutenção</button>
+              <button class="sbtn" :class="{ on: expCategoryFilter === 'administrativo' }" @click="expCategoryFilter = 'administrativo'; expCurrentPage = 1">Administrativo</button>
+              <button class="sbtn" :class="{ on: expCategoryFilter === 'pneus' }" @click="expCategoryFilter = 'pneus'; expCurrentPage = 1">Pneus</button>
+              <button class="sbtn" :class="{ on: expCategoryFilter === 'multas' }" @click="expCategoryFilter = 'multas'; expCurrentPage = 1">Multas</button>
+              <button class="sbtn" :class="{ on: expCategoryFilter === 'pecas' }" @click="expCategoryFilter = 'pecas'; expCurrentPage = 1">Peças</button>
+              <button class="sbtn" :class="{ on: expCategoryFilter === 'combustivel' }" @click="expCategoryFilter = 'combustivel'; expCurrentPage = 1">Combustível</button>
+              <button class="sbtn" :class="{ on: expCategoryFilter === 'outros' }" @click="expCategoryFilter = 'outros'; expCurrentPage = 1">Outros</button>
+            </div>
+            <span class="text-[10px] text-slate-400 ml-auto">{{ expFilteredDespesas.length }} resultado{{ expFilteredDespesas.length !== 1 ? 's' : '' }}</span>
+          </div>
+          <div class="max-h-[60vh] overflow-y-auto overflow-x-auto">
+            <table v-if="expFilteredDespesas.length" class="w-full border-collapse min-w-[700px]">
+              <thead>
+                <tr>
+                  <th class="th">Data</th>
+                  <th class="th">Descrição</th>
+                  <th class="th">Categoria</th>
+                  <th class="th">Fornecedor</th>
+                  <th class="th">Status</th>
+                  <th class="th text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in expPaginatedItems" :key="item.id" class="trow">
+                  <td class="td text-xs whitespace-nowrap">{{ fmtDate(item.due_date) }}</td>
+                  <td class="td text-xs max-w-[280px]" :title="item.description">{{ item.description || '—' }}</td>
+                  <td class="td">
+                    <span class="inline-flex items-center px-2 py-[2px] rounded-full text-[10px] font-semibold"
+                      :class="{
+                        'bg-orange-100 text-orange-700': item.category === 'manutencao',
+                        'bg-blue-100 text-blue-700': item.category === 'pecas',
+                        'bg-violet-100 text-violet-700': item.category === 'pneus',
+                        'bg-green-100 text-green-700': item.category === 'combustivel',
+                        'bg-slate-100 text-slate-600': item.category === 'administrativo',
+                        'bg-red-100 text-red-700': item.category === 'multas',
+                        'bg-stone-100 text-stone-600': item.category === 'outros',
+                      }"
+                    >{{ item.category }}</span>
+                  </td>
+                  <td class="td text-xs">{{ item.supplier_name || item.supplier_name_free || '—' }}</td>
+                  <td class="td">
+                    <span class="inline-flex items-center px-2 py-[2px] rounded-full text-[10px] font-semibold"
+                      :class="{
+                        'bg-yellow-100 text-yellow-700': item.status === 'pendente',
+                        'bg-green-100 text-green-700': item.status === 'pago',
+                        'bg-red-100 text-red-700': item.status === 'vencido',
+                        'bg-slate-100 text-slate-500': item.status === 'cancelado',
+                      }"
+                    >{{ item.status }}</span>
+                  </td>
+                  <td class="td text-right text-xs font-bold text-stone-800 whitespace-nowrap">R$ {{ fmt(item.value) }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-else class="text-center text-slate-400 text-xs py-12">
+              {{ despesas.length ? 'Nenhum resultado para o filtro' : 'Nenhuma despesa registrada para este motorista' }}
+            </div>
+          </div>
+          <div v-if="expTotalPages > 1" class="px-7 py-3 border-t border-stone-100 flex items-center justify-between">
+            <span class="text-xs text-slate-400">Página {{ expCurrentPage }} de {{ expTotalPages }}</span>
+            <div class="flex items-center gap-2">
+              <button @click="expCurrentPage--" :disabled="expCurrentPage === 1"
+                class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors"
+                :class="expCurrentPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'text-stone-600 bg-stone-100/70 hover:bg-stone-100'"
+              >Anterior</button>
+              <button @click="expCurrentPage++" :disabled="expCurrentPage === expTotalPages"
+                class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors"
+                :class="expCurrentPage === expTotalPages ? 'text-slate-300 cursor-not-allowed' : 'text-stone-600 bg-stone-100/70 hover:bg-stone-100'"
+              >Próximo</button>
+            </div>
           </div>
         </div>
       </div>

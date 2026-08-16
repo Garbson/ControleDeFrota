@@ -281,8 +281,34 @@ function invoiceUrl(item) {
 const fmtValue = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
 function fmtDate(raw) {
   if (!raw) return '—'
-  return new Date(raw).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+  const s = String(raw).substring(0, 10)
+  const [y, m, d] = s.split('-')
+  return `${d}/${m}/${y}`
 }
+
+// ── Rastreio de pneu
+const trackingItem = ref(null)
+const trackingMovements = ref([])
+const trackingLoading = ref(false)
+const trackingFilter = ref('')
+
+async function openTracking(item) {
+  trackingItem.value = item
+  trackingMovements.value = []
+  trackingFilter.value = ''
+  trackingLoading.value = true
+  try {
+    trackingMovements.value = await api.get(`/stock/movements?stock_item_id=${item.id}`)
+  } finally {
+    trackingLoading.value = false
+  }
+}
+
+const trackingTotalSaida = computed(() => trackingMovements.value.filter(m => m.type === 'saida').reduce((s, m) => s + Number(m.qty), 0))
+const trackingFiltered = computed(() => {
+  if (!trackingFilter.value) return trackingMovements.value
+  return trackingMovements.value.filter(m => m.type === trackingFilter.value)
+})
 
 function buildExportData() {
   const statusLabel = { novo: 'Novo', recapado: 'Recapado', usado: 'Usado' }
@@ -426,6 +452,9 @@ onMounted(() => {
             <td class="td text-slate-500 text-xs">{{ fmtDate(s.entry_date) }}</td>
             <td class="td text-center">
               <div class="flex items-center justify-center gap-1.5">
+                <button @click="openTracking(s)" title="Rastreio" class="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 p-1.5 rounded-md transition-colors inline-flex">
+                  <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+                </button>
                 <button @click="openExit(s)" class="btn-p !py-1.5 !px-3 text-xs" :disabled="s.qty <= 0">Registrar Saída</button>
                 <button
                   @click="deleteStock(s)"
@@ -533,6 +562,75 @@ onMounted(() => {
               <button @click="exitModal = null" class="px-4 py-2 bg-transparent border border-stone-200 rounded-lg text-stone-600 text-xs font-semibold cursor-pointer">Cancelar</button>
               <button @click="confirmExit" class="btn-p" :disabled="!exitForm.qty">Confirmar Saída</button>
             </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Tracking Modal -->
+    <Teleport to="body">
+      <div v-if="trackingItem" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" @click.self="trackingItem = null">
+        <div class="glass-strong rounded-2xl w-full max-w-[720px] overflow-hidden">
+          <div class="bg-gradient-to-br from-indigo-700 to-indigo-900 px-7 py-5 flex items-center justify-between">
+            <div>
+              <h3 class="m-0 text-[15px] font-bold text-white">Rastreio de Pneu</h3>
+              <p class="mt-1 mb-0 text-xs text-indigo-200">{{ trackingItem.description }} {{ trackingItem.brand ? `· ${trackingItem.brand}` : '' }}</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="text-right">
+                <div class="text-[10px] text-indigo-300 uppercase font-bold">Estoque Atual</div>
+                <div class="text-white font-extrabold text-lg">{{ trackingItem.qty }}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-[10px] text-indigo-300 uppercase font-bold">Total Saídas</div>
+                <div class="text-orange-300 font-extrabold text-lg">{{ trackingTotalSaida }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="px-7 py-3 border-b border-stone-100 flex items-center gap-2">
+            <button class="sbtn" :class="{ on: !trackingFilter }" @click="trackingFilter = ''">Todos</button>
+            <button class="sbtn" :class="{ on: trackingFilter === 'saida' }" @click="trackingFilter = 'saida'">Saídas</button>
+            <button class="sbtn" :class="{ on: trackingFilter === 'entrada' }" @click="trackingFilter = 'entrada'">Entradas</button>
+            <span class="text-[10px] text-slate-400 ml-auto">{{ trackingFiltered.length }} registro{{ trackingFiltered.length !== 1 ? 's' : '' }}</span>
+          </div>
+          <div class="max-h-[60vh] overflow-y-auto overflow-x-auto">
+            <div v-if="trackingLoading" class="flex items-center justify-center py-12 text-slate-400 text-sm">Carregando...</div>
+            <table v-else-if="trackingFiltered.length" class="w-full border-collapse min-w-[600px]">
+              <thead>
+                <tr>
+                  <th class="th">Data</th>
+                  <th class="th">Tipo</th>
+                  <th class="th">Motorista</th>
+                  <th class="th">Veículo</th>
+                  <th class="th">Qtd</th>
+                  <th class="th">Observação</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="m in trackingFiltered" :key="m.id" class="trow">
+                  <td class="td text-xs whitespace-nowrap">{{ fmtDate(m.mov_date) }}</td>
+                  <td class="td">
+                    <span class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold"
+                      :class="m.type === 'entrada' ? 'bg-green-100 text-green-600' : 'bg-orange-50 text-orange-600'">
+                      {{ m.type === 'entrada' ? '↓ Entrada' : '↑ Saída' }}
+                    </span>
+                  </td>
+                  <td class="td text-xs">{{ m.driver_name || '—' }}</td>
+                  <td class="td">
+                    <span v-if="m.vehicle_plate" class="font-mono text-[11px] font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded">{{ m.vehicle_plate }}</span>
+                    <span v-else class="text-xs text-slate-400">—</span>
+                  </td>
+                  <td class="td font-bold text-stone-800">{{ m.qty }}</td>
+                  <td class="td text-xs text-slate-500 max-w-[200px]" :title="m.obs">{{ m.obs || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-else class="text-center text-slate-400 text-xs py-12">
+              {{ trackingMovements.length ? 'Nenhum resultado para o filtro' : 'Nenhuma movimentação registrada para este pneu' }}
+            </div>
+          </div>
+          <div class="px-7 py-4 border-t border-stone-100 flex justify-end">
+            <button @click="trackingItem = null" class="px-4 py-2 bg-transparent border border-stone-200 rounded-lg text-stone-600 text-xs font-semibold cursor-pointer">Fechar</button>
           </div>
         </div>
       </div>

@@ -50,8 +50,8 @@ router.get('/', async (req, res) => {
       WHERE 1=1
     `
     if (driver_id) { params.push(driver_id); sql += ` AND t.driver_id = ?` }
-    if (from)      { params.push(from);      sql += ` AND t.start_date >= ?` }
-    if (to)        { params.push(to);        sql += ` AND t.start_date <= ?` }
+    if (from) { params.push(from); sql += ` AND t.start_date >= ?` }
+    if (to) { params.push(to); sql += ` AND t.start_date <= ?` }
     sql += ` ORDER BY t.start_date DESC`
 
     const trips = await query(sql, params)
@@ -73,12 +73,12 @@ router.get('/', async (req, res) => {
         [trip.driver_id, trip.start_date, endDate]
       )
 
-      trip.fuel_total      = Number(fuelRow.total)
-      trip.fuel_liters     = Number(fuelRow.liters)
-      trip.expenses_total  = Number(expRow.total)
-      trip.total_cost      = trip.fuel_total + trip.expenses_total + Number(trip.payable_expenses_total || 0)
+      trip.fuel_total = Number(fuelRow.total)
+      trip.fuel_liters = Number(fuelRow.liters)
+      trip.expenses_total = Number(expRow.total)
+      trip.total_cost = trip.fuel_total + trip.expenses_total + Number(trip.payable_expenses_total || 0)
       trip.revenue = Number(trip.legs_freight_total || 0)
-      trip.profit          = trip.revenue - trip.total_cost
+      trip.profit = trip.revenue - trip.total_cost
       trip.avg_consumption = trip.fuel_liters > 0 && trip.distance > 0
         ? (trip.distance / trip.fuel_liters).toFixed(2)
         : null
@@ -106,7 +106,7 @@ router.get('/:id', async (req, res) => {
         (CASE WHEN t.final_km > t.initial_km THEN t.final_km - t.initial_km ELSE 0 END) AS distance
       FROM trips t
       JOIN  drivers  d  ON d.id  = t.driver_id
-      LEFT JOIN vehicles v2 ON v2.id = t.truck_id
+      JOIN vehicles v2 ON v2.id = t.truck_id
       LEFT JOIN vehicles v3 ON v3.id = t.trailer_id
       LEFT JOIN vehicles v4 ON v4.id = t.trailer_id_2
       WHERE t.id = ?
@@ -114,23 +114,32 @@ router.get('/:id', async (req, res) => {
 
     if (!trip) return res.status(404).json({ error: 'Viagem não encontrada' })
 
-    const endDate    = trip.end_date || trip.start_date
-    trip.distance    = Number(trip.distance)
+    const endDate = trip.end_date || trip.start_date
+    trip.distance = Number(trip.distance)
 
     trip.fuel_records = await query(
-      `SELECT fr.*, fr.fuel_type, v.plate AS vehicle_plate
+      `SELECT fr.*, v.plate AS vehicle_plate
        FROM fuel_records fr
        LEFT JOIN vehicles v ON v.id = fr.vehicle_id
        WHERE fr.driver_id = ? AND fr.fuel_date >= ? AND fr.fuel_date <= ?
        ORDER BY fr.fuel_date`,
       [trip.driver_id, trip.start_date, endDate]
     )
-    const regularFuel   = trip.fuel_records.filter(f => f.fuel_type !== 'Diesel Termo King')
-    const thermoKing    = trip.fuel_records.filter(f => f.fuel_type === 'Diesel Termo King')
-    trip.fuel_total         = regularFuel.reduce((s, f) => s + Number(f.total), 0)
-    trip.fuel_liters        = regularFuel.reduce((s, f) => s + Number(f.liters), 0)
-    trip.thermo_king_total  = thermoKing.reduce((s, f) => s + Number(f.total), 0)
+    const regularFuel = trip.fuel_records.filter(f => f.fuel_type !== 'Diesel Termo King' && f.fuel_type !== 'Arla 32')
+    const thermoKing = trip.fuel_records.filter(f => f.fuel_type === 'Diesel Termo King')
+    const arla = trip.fuel_records.filter(f => f.fuel_type === 'Arla 32')
+    trip.fuel_total = regularFuel.reduce((s, f) => s + Number(f.total), 0)
+    trip.fuel_liters = regularFuel.reduce((s, f) => s + Number(f.liters), 0)
+    trip.thermo_king_total = thermoKing.reduce((s, f) => s + Number(f.total), 0)
     trip.thermo_king_liters = thermoKing.reduce((s, f) => s + Number(f.liters), 0)
+    trip.arla_total = arla.reduce((s, f) => s + Number(f.total), 0)
+    trip.arla_liters = arla.reduce((s, f) => s + Number(f.liters), 0)
+
+
+
+    trip.regular_fuel_records = regularFuel
+    trip.thermo_king_records = thermoKing
+    trip.arla_records = arla
 
     trip.expenses = await query(
       `SELECT * FROM expenses
@@ -165,7 +174,7 @@ router.get('/:id', async (req, res) => {
       trip.receivable = null
     }
 
-    trip.total_cost      = trip.fuel_total + trip.thermo_king_total + trip.expenses_total + trip.payable_expenses_total
+    trip.total_cost = trip.fuel_total + trip.thermo_king_total + trip.expenses_total + trip.payable_expenses_total
     trip.avg_consumption = trip.fuel_liters > 0 && trip.distance > 0
       ? Number((trip.distance / trip.fuel_liters).toFixed(2))
       : null
@@ -177,7 +186,7 @@ router.get('/:id', async (req, res) => {
 
     const legsFreight = trip.legs.reduce((s, l) => s + Number(l.freight_value || 0), 0)
     trip.revenue = legsFreight
-    trip.profit  = trip.revenue - trip.total_cost
+    trip.profit = trip.revenue - trip.total_cost
 
     res.json(trip)
   } catch (err) {
@@ -188,6 +197,7 @@ router.get('/:id', async (req, res) => {
 
 // POST /api/trips
 router.post('/', [
+  // validação antes de mandar para de montar o sql
   body('driver_id').isInt({ gt: 0 }).withMessage('Motorista obrigatório'),
   body('origin').notEmpty().withMessage('Origem obrigatória'),
   body('destination').notEmpty().withMessage('Destino obrigatório'),
@@ -205,7 +215,7 @@ router.post('/', [
     obs,
   } = req.body
 
-  const fv     = Number(freight_value) || 0
+  const fv = Number(freight_value) || 0
   const fstatus = fv > 0 ? (freight_status || 'a_receber') : 'sem_frete'
 
   try {
@@ -217,30 +227,30 @@ router.post('/', [
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         driver_id,
-        truck_id     || null,
-        trailer_id   || null,
+        truck_id || null,
+        trailer_id || null,
         trailer_id_2 || null,
         origin, destination,
-        cargo  || null,
+        cargo || null,
         client || null,
         initial_km,
-        final_km   || null,
+        final_km || null,
         start_date,
-        end_date   || null,
+        end_date || null,
         fv, fstatus,
-        obs        || null,
+        obs || null,
       ]
     )
     const tripId = result.insertId
 
     // Criar conta a receber se houver frete
     if (fv > 0) {
-      const recStatus   = fstatus === 'pago' ? 'recebido' : 'pendente'
+      const recStatus = fstatus === 'pago' ? 'recebido' : 'pendente'
       const receivedDate = fstatus === 'pago' ? (end_date || start_date) : null
-      const dueDate      = end_date || start_date
+      const dueDate = end_date || start_date
 
       const [driverRow] = await query('SELECT name FROM drivers WHERE id = ?', [driver_id])
-      const driverName  = driverRow?.name || ''
+      const driverName = driverRow?.name || ''
 
       const recResult = await query(
         `INSERT INTO accounts_receivable
@@ -278,6 +288,7 @@ router.put('/:id', [
   body('destination').notEmpty().withMessage('Destino obrigatório'),
   body('initial_km').isFloat({ gt: 0 }).withMessage('KM inicial obrigatório'),
   body('start_date').isDate().withMessage('Data de início obrigatória'),
+  body('truck_id').isInt({ gt: 0 }).withMessage('Caminhão é obrigatorio!')
 ], async (req, res) => {
   const errors = validationResult(req)
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() })
@@ -290,7 +301,7 @@ router.put('/:id', [
     obs,
   } = req.body
 
-  const fv      = Number(freight_value) || 0
+  const fv = Number(freight_value) || 0
   const fstatus = fv > 0 ? (freight_status || 'a_receber') : 'sem_frete'
 
   try {
@@ -303,18 +314,18 @@ router.put('/:id', [
        WHERE id=?`,
       [
         driver_id,
-        truck_id     || null,
-        trailer_id   || null,
+        truck_id || null,
+        trailer_id || null,
         trailer_id_2 || null,
         origin, destination,
-        cargo  || null,
+        cargo || null,
         client || null,
         initial_km,
-        final_km   || null,
+        final_km || null,
         start_date,
-        end_date   || null,
+        end_date || null,
         fv, fstatus,
-        obs        || null,
+        obs || null,
         req.params.id,
       ]
     )
@@ -362,7 +373,7 @@ router.post('/:id/legs', [
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() })
 
   const { origin, destination, departure_date, arrival_date, km_start, km_end, cargo, obs, client, freight_value, freight_status } = req.body
-  const fv     = Number(freight_value) || 0
+  const fv = Number(freight_value) || 0
   const fstatus = fv > 0 ? (freight_status || 'a_receber') : 'sem_frete'
 
   try {
@@ -377,9 +388,9 @@ router.post('/:id/legs', [
 
     let receivable_id = null
     if (fv > 0) {
-      const recStatus    = fstatus === 'pago' ? 'recebido' : 'pendente'
+      const recStatus = fstatus === 'pago' ? 'recebido' : 'pendente'
       const receivedDate = fstatus === 'pago' ? (arrival_date || departure_date || trip.start_date) : null
-      const dueDate      = arrival_date || departure_date || trip.start_date
+      const dueDate = arrival_date || departure_date || trip.start_date
 
       const recResult = await query(
         `INSERT INTO accounts_receivable
@@ -424,7 +435,7 @@ router.post('/:id/legs', [
 // PUT /api/trips/:id/legs/:legId
 router.put('/:id/legs/:legId', async (req, res) => {
   const { origin, destination, departure_date, arrival_date, km_start, km_end, cargo, obs, client, freight_value, freight_status } = req.body
-  const fv      = Number(freight_value) || 0
+  const fv = Number(freight_value) || 0
   const fstatus = fv > 0 ? (freight_status || 'a_receber') : 'sem_frete'
 
   try {
@@ -436,9 +447,9 @@ router.put('/:id/legs/:legId', async (req, res) => {
     let receivable_id = leg.receivable_id
 
     if (fv > 0) {
-      const recStatus    = fstatus === 'pago' ? 'recebido' : 'pendente'
+      const recStatus = fstatus === 'pago' ? 'recebido' : 'pendente'
       const receivedDate = fstatus === 'pago' ? (arrival_date || departure_date || trip.start_date) : null
-      const dueDate      = arrival_date || departure_date || trip.start_date
+      const dueDate = arrival_date || departure_date || trip.start_date
 
       if (receivable_id) {
         await query(

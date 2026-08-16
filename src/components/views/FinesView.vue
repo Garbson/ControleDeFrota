@@ -1,226 +1,384 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { useFines } from '../../composables/useFines'
-import { useDrivers } from '../../composables/useDrivers'
-import { useVehicles } from '../../composables/useVehicles'
-import { useConfirm } from '../../composables/useConfirm'
-import { printTable } from '../../utils/printTable'
-import { exportExcelGeneric, exportWordGeneric } from '../../utils/exportTable'
-import TableFooter from '../ui/TableFooter.vue'
+import { computed, onMounted, ref, watch } from "vue";
+import { useConfirm } from "../../composables/useConfirm";
+import { useDrivers } from "../../composables/useDrivers";
+import { useFines } from "../../composables/useFines";
+import { useVehicles } from "../../composables/useVehicles";
+import { exportExcelGeneric, exportWordGeneric } from "../../utils/exportTable";
+import { printTable } from "../../utils/printTable";
+import TableFooter from "../ui/TableFooter.vue";
 
-const props = defineProps({ showToast: Function })
+const props = defineProps({ showToast: Function });
 
-const { items, summary, loading, descriptions, fetchAll, fetchSummary, fetchDescriptions, create, update, markPaid, markAppeal, remove } = useFines()
-const { drivers, fetchAll: fetchDrivers } = useDrivers()
-const { vehicles, fetchAll: fetchVehicles } = useVehicles()
-const { confirmAction } = useConfirm()
+const {
+  items,
+  summary,
+  loading,
+  descriptions,
+  fetchAll,
+  fetchSummary,
+  fetchDescriptions,
+  create,
+  update,
+  markPaid,
+  markAppeal,
+  remove,
+} = useFines();
+const { drivers, fetchAll: fetchDrivers } = useDrivers();
+const { vehicles, fetchAll: fetchVehicles } = useVehicles();
+const { confirmAction } = useConfirm();
 
 function fmtDate(raw) {
-  if (!raw) return '—'
-  return new Date(raw).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+  if (!raw) return "—";
+  return new Date(raw).toLocaleDateString("pt-BR", { timeZone: "UTC" });
 }
 
-const statusFilter = ref('all')
-const descriptionFilter = ref('')
-const showModal = ref(false)
-const saving = ref(false)
-const formError = ref('')
-const editingId = ref(null)
-const viewingFine = ref(null)
+const statusFilter = ref("all");
+const descriptionFilter = ref("");
+const showModal = ref(false);
+const saving = ref(false);
+const formError = ref("");
+const editingId = ref(null);
+const viewingFine = ref(null);
 
 const form = ref({
-  driver_id: '',
-  vehicle_plate: '',
-  value: '',
-  fine_date: new Date().toISOString().split('T')[0],
-  due_date: '',
-  description: '',
-  category: 'outros',
-  obs: '',
-})
+  driver_id: "",
+  vehicle_plate: "",
+  value: "",
+  fine_date: new Date().toISOString().split("T")[0],
+  due_date: "",
+  description: "",
+  category: "outros",
+  obs: "",
+});
 
 const CATEGORIES = [
-  { value: 'velocidade',    label: 'Excesso de Velocidade' },
-  { value: 'semaforo',      label: 'Semáforo / Pare' },
-  { value: 'estacionamento', label: 'Estacionamento' },
-  { value: 'documentacao',  label: 'Documentação' },
-  { value: 'outros',        label: 'Outros' },
-]
+  { value: "velocidade", label: "Excesso de Velocidade" },
+  { value: "semaforo", label: "Semáforo / Pare" },
+  { value: "estacionamento", label: "Estacionamento" },
+  { value: "documentacao", label: "Documentação" },
+  { value: "outros", label: "Outros" },
+];
 
 const CATEGORY_COLORS = {
-  velocidade:     'bg-red-100 text-red-700',
-  semaforo:       'bg-orange-100 text-orange-700',
-  estacionamento: 'bg-yellow-100 text-yellow-700',
-  documentacao:   'bg-blue-100 text-blue-700',
-  outros:         'bg-stone-100/70 text-stone-600',
-}
+  velocidade: "bg-red-100 text-red-700",
+  semaforo: "bg-orange-100 text-orange-700",
+  estacionamento: "bg-yellow-100 text-yellow-700",
+  documentacao: "bg-blue-100 text-blue-700",
+  outros: "bg-stone-100/70 text-stone-600",
+};
 
 const STATUS_COLORS = {
-  pendente: 'bg-amber-100 text-amber-700',
-  pago:     'bg-green-100 text-green-700',
-  recurso:  'bg-violet-100 text-violet-700',
-}
+  pendente: "bg-amber-100 text-amber-700",
+  pago: "bg-green-100 text-green-700",
+  recurso: "bg-violet-100 text-violet-700",
+};
 
 // Todas as placas para o select
-const allPlates = computed(() => vehicles.value.map(v => v.plate).sort())
+const allPlates = computed(() => vehicles.value.map((v) => v.plate).sort());
 
 const filtered = computed(() => {
-  let list = items.value
-  if (statusFilter.value !== 'all') list = list.filter(f => f.status === statusFilter.value)
-  if (descriptionFilter.value) list = list.filter(f => (f.description || '').toLowerCase().includes(descriptionFilter.value.toLowerCase()))
-  return list
-})
-const finePage = ref(1)
-const finePageSize = ref(Number(localStorage.getItem('cf_fines_page_size')) || 20)
-const finePages = computed(() => Math.max(1, Math.ceil(filtered.value.length / finePageSize.value)))
-const pagedFines = computed(() => filtered.value.slice((finePage.value - 1) * finePageSize.value, finePage.value * finePageSize.value))
-statusFilter.value = localStorage.getItem('cf_filter_fines') || 'all'
+  let list = items.value;
+  if (statusFilter.value !== "all")
+    list = list.filter((f) => f.status === statusFilter.value);
+  if (descriptionFilter.value)
+    list = list.filter((f) =>
+      (f.description || "")
+        .toLowerCase()
+        .includes(descriptionFilter.value.toLowerCase()),
+    );
+  return list;
+});
+const finePage = ref(1);
+const finePageSize = ref(
+  Number(localStorage.getItem("cf_fines_page_size")) || 20,
+);
+const finePages = computed(() =>
+  Math.max(1, Math.ceil(filtered.value.length / finePageSize.value)),
+);
+const pagedFines = computed(() =>
+  filtered.value.slice(
+    (finePage.value - 1) * finePageSize.value,
+    finePage.value * finePageSize.value,
+  ),
+);
+statusFilter.value = localStorage.getItem("cf_filter_fines") || "all";
 watch([statusFilter, descriptionFilter, finePageSize], () => {
-  finePage.value = 1
-  localStorage.setItem('cf_filter_fines', statusFilter.value)
-  localStorage.setItem('cf_fines_page_size', finePageSize.value)
-})
+  finePage.value = 1;
+  localStorage.setItem("cf_filter_fines", statusFilter.value);
+  localStorage.setItem("cf_fines_page_size", finePageSize.value);
+});
 
-const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+const fmt = (v) =>
+  Number(v || 0).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
 
 function resetForm() {
-  editingId.value = null
+  editingId.value = null;
   form.value = {
-    driver_id: '', vehicle_plate: '', value: '',
-    fine_date: new Date().toISOString().split('T')[0],
-    due_date: '', description: '', category: 'outros', obs: '',
-  }
-  formError.value = ''
+    driver_id: "",
+    vehicle_plate: "",
+    value: "",
+    fine_date: new Date().toISOString().split("T")[0],
+    due_date: "",
+    description: "",
+    category: "outros",
+    obs: "",
+  };
+  formError.value = "";
 }
 
 function openEdit(f) {
-  editingId.value = f.id
+  editingId.value = f.id;
   form.value = {
-    driver_id: f.driver_id || '',
-    vehicle_plate: f.vehicle_plate || '',
+    driver_id: f.driver_id || "",
+    vehicle_plate: f.vehicle_plate || "",
     value: f.value,
-    fine_date: f.fine_date?.split('T')[0] || '',
-    due_date: f.due_date?.split('T')[0] || '',
-    description: f.description || '',
-    category: f.category || 'outros',
-    obs: f.obs || '',
-  }
-  formError.value = ''
-  showModal.value = true
+    fine_date: f.fine_date?.split("T")[0] || "",
+    due_date: f.due_date?.split("T")[0] || "",
+    description: f.description || "",
+    category: f.category || "outros",
+    obs: f.obs || "",
+  };
+  formError.value = "";
+  showModal.value = true;
 }
 
 // Ao selecionar motorista, auto-preenche placa do cavalo
 function onDriverChange() {
-  const d = drivers.value.find(dr => String(dr.id) === String(form.value.driver_id))
-  if (d?.truck_plate) form.value.vehicle_plate = d.truck_plate
+  const d = drivers.value.find(
+    (dr) => String(dr.id) === String(form.value.driver_id),
+  );
+  if (d?.truck_plate) form.value.vehicle_plate = d.truck_plate;
 }
 
 async function submit() {
-  if (!form.value.vehicle_plate) { formError.value = 'Selecione a placa'; return }
-  if (!form.value.value || Number(form.value.value) <= 0) { formError.value = 'Informe o valor'; return }
-  saving.value = true
-  formError.value = ''
+  if (!form.value.vehicle_plate) {
+    formError.value = "Selecione a placa";
+    return;
+  }
+  if (!form.value.value || Number(form.value.value) <= 0) {
+    formError.value = "Informe o valor";
+    return;
+  }
+  saving.value = true;
+  formError.value = "";
   try {
-    const data = { ...form.value, driver_id: form.value.driver_id || null, value: Number(form.value.value) }
+    const data = {
+      ...form.value,
+      driver_id: form.value.driver_id || null,
+      value: Number(form.value.value),
+    };
     if (editingId.value) {
-      await update(editingId.value, data)
-      props.showToast?.('✅ Multa atualizada')
+      await update(editingId.value, data);
+      props.showToast?.("✅ Multa atualizada");
     } else {
-      await create(data)
-      props.showToast?.('✅ Multa lançada e incluída no financeiro')
+      await create(data);
+      props.showToast?.("✅ Multa lançada e incluída no financeiro");
     }
-    showModal.value = false
-    resetForm()
+    showModal.value = false;
+    resetForm();
   } catch (e) {
-    formError.value = e.message || 'Erro ao salvar'
+    formError.value = e.message || "Erro ao salvar";
   } finally {
-    saving.value = false
+    saving.value = false;
   }
 }
 
 async function pay(fine) {
-  if (!await confirmAction({ title: 'Confirmar pagamento', message: `Marcar a multa de R$ ${Number(fine.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} como paga?`, confirmText: 'Confirmar pagamento', tone: 'primary' })) return
-  await markPaid(fine.id, new Date().toISOString().split('T')[0])
-  props.showToast?.('✅ Multa marcada como paga')
+  if (
+    !(await confirmAction({
+      title: "Confirmar pagamento",
+      message: `Marcar a multa de R$ ${Number(fine.value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} como paga?`,
+      confirmText: "Confirmar pagamento",
+      tone: "primary",
+    }))
+  )
+    return;
+  await markPaid(fine.id, new Date().toISOString().split("T")[0]);
+  props.showToast?.("✅ Multa marcada como paga");
 }
 
 async function appeal(fine) {
-  if (!await confirmAction({ title: 'Enviar para recurso', message: 'Tem certeza que deseja marcar esta multa como em recurso?', confirmText: 'Confirmar recurso', tone: 'primary' })) return
-  await markAppeal(fine.id)
-  props.showToast?.('✅ Multa enviada para recurso')
+  if (
+    !(await confirmAction({
+      title: "Enviar para recurso",
+      message: "Tem certeza que deseja marcar esta multa como em recurso?",
+      confirmText: "Confirmar recurso",
+      tone: "primary",
+    }))
+  )
+    return;
+  await markAppeal(fine.id);
+  props.showToast?.("✅ Multa enviada para recurso");
 }
 
 async function del(fine) {
-  if (!await confirmAction({ title: 'Remover multa', message: 'Tem certeza que deseja remover esta multa?', confirmText: 'Remover' })) return
-  await remove(fine.id)
-  props.showToast?.('✅ Multa removida')
+  if (
+    !(await confirmAction({
+      title: "Remover multa",
+      message: "Tem certeza que deseja remover esta multa?",
+      confirmText: "Remover",
+    }))
+  )
+    return;
+  await remove(fine.id);
+  props.showToast?.("✅ Multa removida");
 }
 
 function buildExportData() {
-  const data = filtered.value
-  const statusLabel = { pendente: 'Pendente', pago: 'Pago', recurso: 'Em recurso' }
+  const data = filtered.value;
+  const statusLabel = {
+    pendente: "Pendente",
+    pago: "Pago",
+    recurso: "Em recurso",
+  };
   return {
-    title: 'Multas',
-    subtitle: statusFilter.value !== 'all' ? `Status: ${statusLabel[statusFilter.value]}` : null,
-    headers: ['Data', 'Vencimento', 'Valor (R$)', 'Placa', 'Motorista', 'Descrição', 'Status'],
-    rows: data.map(f => ({ type: 'row', data: [
-      fmtDate(f.fine_date),
-      fmtDate(f.due_date),
-      Number(f.value || 0),
-      f.vehicle_plate || '',
-      f.driver_name || '',
-      f.description || '',
-      statusLabel[f.status] || f.status || '',
-    ]})),
-    totalLabel: 'Total',
+    title: "Multas",
+    subtitle:
+      statusFilter.value !== "all"
+        ? `Status: ${statusLabel[statusFilter.value]}`
+        : null,
+    headers: [
+      "Data",
+      "Vencimento",
+      "Valor (R$)",
+      "Placa",
+      "Motorista",
+      "Descrição",
+      "Status",
+    ],
+    rows: data.map((f) => ({
+      type: "row",
+      data: [
+        fmtDate(f.fine_date),
+        fmtDate(f.due_date),
+        Number(f.value || 0),
+        f.vehicle_plate || "",
+        f.driver_name || "",
+        f.description || "",
+        statusLabel[f.status] || f.status || "",
+      ],
+    })),
+    totalLabel: "Total",
     totalValue: data.reduce((s, f) => s + Number(f.value || 0), 0),
     moneyCols: [2],
-  }
+  };
 }
-function handlePrint() { const d = buildExportData(); printTable({ ...d, totals: { label: d.totalLabel, value: d.totalValue } }) }
-function handleExcel() { exportExcelGeneric(buildExportData()) }
-function handleWord() { exportWordGeneric(buildExportData()) }
+function handlePrint() {
+  const d = buildExportData();
+  printTable({ ...d, totals: { label: d.totalLabel, value: d.totalValue } });
+}
+function handleExcel() {
+  exportExcelGeneric(buildExportData());
+}
+function handleWord() {
+  exportWordGeneric(buildExportData());
+}
 
 onMounted(async () => {
-  await Promise.all([fetchAll(), fetchSummary(), fetchDrivers(), fetchVehicles(), fetchDescriptions()])
-})
+  await Promise.all([
+    fetchAll(),
+    fetchSummary(),
+    fetchDrivers(),
+    fetchVehicles(),
+    fetchDescriptions(),
+  ]);
+});
 </script>
 
 <template>
   <div class="space-y-3.5">
-
     <!-- KPI Cards -->
     <div class="grid grid-cols-4 gap-3.5">
       <div class="glass rounded-xl p-4">
-        <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total de Multas</div>
-        <div class="text-3xl font-extrabold text-stone-800">{{ summary.total || 0 }}</div>
-        <div class="text-xs text-slate-400 mt-1">{{ fmt(summary.total_value) }}</div>
+        <div
+          class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+        >
+          Total de Multas
+        </div>
+        <div class="text-3xl font-extrabold text-stone-800">
+          {{ summary.total || 0 }}
+        </div>
+        <div class="text-xs text-slate-400 mt-1">
+          {{ fmt(summary.total_value) }}
+        </div>
       </div>
       <div class="glass rounded-xl p-4 !border-amber-500/25">
-        <div class="text-[10.5px] font-bold text-amber-500 uppercase tracking-wider mb-1">Pendentes</div>
-        <div class="text-3xl font-extrabold text-amber-600">{{ summary.count_pendente || 0 }}</div>
-        <div class="text-xs text-amber-400 mt-1">{{ fmt(summary.value_pendente) }}</div>
+        <div
+          class="text-[10.5px] font-bold text-amber-500 uppercase tracking-wider mb-1"
+        >
+          Pendentes
+        </div>
+        <div class="text-3xl font-extrabold text-amber-600">
+          {{ summary.count_pendente || 0 }}
+        </div>
+        <div class="text-xs text-amber-400 mt-1">
+          {{ fmt(summary.value_pendente) }}
+        </div>
       </div>
       <div class="glass rounded-xl p-4 !border-green-500/25">
-        <div class="text-[10.5px] font-bold text-green-500 uppercase tracking-wider mb-1">Pagas</div>
-        <div class="text-3xl font-extrabold text-green-600">{{ summary.count_pago || 0 }}</div>
-        <div class="text-xs text-green-400 mt-1">{{ fmt(summary.value_pago) }}</div>
+        <div
+          class="text-[10.5px] font-bold text-green-500 uppercase tracking-wider mb-1"
+        >
+          Pagas
+        </div>
+        <div class="text-3xl font-extrabold text-green-600">
+          {{ summary.count_pago || 0 }}
+        </div>
+        <div class="text-xs text-green-400 mt-1">
+          {{ fmt(summary.value_pago) }}
+        </div>
       </div>
       <div class="glass rounded-xl p-4 !border-violet-500/25">
-        <div class="text-[10.5px] font-bold text-violet-500 uppercase tracking-wider mb-1">Em Recurso</div>
-        <div class="text-3xl font-extrabold text-violet-600">{{ summary.count_recurso || 0 }}</div>
+        <div
+          class="text-[10.5px] font-bold text-violet-500 uppercase tracking-wider mb-1"
+        >
+          Em Recurso
+        </div>
+        <div class="text-3xl font-extrabold text-violet-600">
+          {{ summary.count_recurso || 0 }}
+        </div>
         <div class="text-xs text-violet-400 mt-1">aguardando resultado</div>
       </div>
     </div>
 
     <!-- Toolbar -->
-    <div class="glass rounded-[11px] py-3.5 px-[18px] flex justify-between items-center flex-wrap gap-2.5">
+    <div
+      class="glass rounded-[11px] py-3.5 px-[18px] flex justify-between items-center flex-wrap gap-2.5"
+    >
       <div class="flex items-center gap-2.5">
         <span class="text-xs font-bold text-slate-500">STATUS:</span>
-        <button class="sbtn" :class="{ on: statusFilter === 'all' }"      @click="statusFilter = 'all'">Todos</button>
-        <button class="sbtn" :class="{ on: statusFilter === 'pendente' }" @click="statusFilter = 'pendente'">Pendentes</button>
-        <button class="sbtn" :class="{ on: statusFilter === 'recurso' }"  @click="statusFilter = 'recurso'">Em Recurso</button>
-        <button class="sbtn" :class="{ on: statusFilter === 'pago' }"     @click="statusFilter = 'pago'">Pagas</button>
+        <button
+          class="sbtn"
+          :class="{ on: statusFilter === 'all' }"
+          @click="statusFilter = 'all'"
+        >
+          Todos
+        </button>
+        <button
+          class="sbtn"
+          :class="{ on: statusFilter === 'pendente' }"
+          @click="statusFilter = 'pendente'"
+        >
+          Pendentes
+        </button>
+        <button
+          class="sbtn"
+          :class="{ on: statusFilter === 'recurso' }"
+          @click="statusFilter = 'recurso'"
+        >
+          Em Recurso
+        </button>
+        <button
+          class="sbtn"
+          :class="{ on: statusFilter === 'pago' }"
+          @click="statusFilter = 'pago'"
+        >
+          Pagas
+        </button>
       </div>
       <div class="flex items-center gap-2.5">
         <span class="text-xs font-bold text-slate-500">CÓDIGO:</span>
@@ -229,37 +387,95 @@ onMounted(async () => {
           type="text"
           placeholder="Buscar código..."
           class="text-xs rounded-md px-2 py-1.5 min-w-[160px] outline-none"
-          style="background:white;border:1px solid rgba(0,0,0,0.12);color:#1c1917;"
+          style="
+            background: white;
+            border: 1px solid rgba(0, 0, 0, 0.12);
+            color: #1c1917;
+          "
         />
         <div class="w-px h-5 bg-stone-200" />
-        <button @click="handlePrint" class="sbtn flex items-center gap-1" title="Imprimir / PDF">
-          <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+        <button
+          @click="handlePrint"
+          class="sbtn flex items-center gap-1"
+          title="Imprimir / PDF"
+        >
+          <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24">
+            <path
+              d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"
+            />
+          </svg>
           PDF
         </button>
-        <button @click="handleExcel" class="sbtn flex items-center gap-1" title="Exportar Excel">Excel</button>
-        <button @click="handleWord" class="sbtn flex items-center gap-1" title="Exportar Word">Word</button>
+        <button
+          @click="handleExcel"
+          class="sbtn flex items-center gap-1"
+          title="Exportar Excel"
+        >
+          Excel
+        </button>
+        <button
+          @click="handleWord"
+          class="sbtn flex items-center gap-1"
+          title="Exportar Word"
+        >
+          Word
+        </button>
       </div>
       <button
         @click="showModal = true"
         class="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors"
       >
-        <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+        <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+        </svg>
         Lançar Multa
       </button>
     </div>
 
     <!-- Tabela -->
     <div class="glass rounded-xl overflow-hidden">
-      <div v-if="loading" class="space-y-2 p-4"><div v-for="i in 6" :key="i" class="skeleton h-12 rounded-lg" /></div>
+      <div v-if="loading" class="space-y-2 p-4">
+        <div v-for="i in 6" :key="i" class="skeleton h-12 rounded-lg" />
+      </div>
       <template v-else>
-        <div class="grid grid-cols-[1.5fr_1fr_1fr_110px_120px_110px_160px] gap-2 px-[18px] py-2.5 border-b border-stone-200">
-          <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Motorista</div>
-          <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Placa</div>
-          <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Infração</div>
-          <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Valor</div>
-          <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Data Multa</div>
-          <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Status</div>
-          <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Ações</div>
+        <div
+          class="grid grid-cols-[1.5fr_1fr_1fr_110px_120px_110px_160px] gap-2 px-[18px] py-2.5 border-b border-stone-200"
+        >
+          <div
+            class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider"
+          >
+            Motorista
+          </div>
+          <div
+            class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider"
+          >
+            Placa
+          </div>
+          <div
+            class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider"
+          >
+            Infração
+          </div>
+          <div
+            class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider"
+          >
+            Valor
+          </div>
+          <div
+            class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider"
+          >
+            Data Multa
+          </div>
+          <div
+            class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider"
+          >
+            Status
+          </div>
+          <div
+            class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider"
+          >
+            Ações
+          </div>
         </div>
 
         <div
@@ -272,25 +488,53 @@ onMounted(async () => {
             <div
               v-if="f.driver_name"
               class="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-extrabold flex-shrink-0"
-              :style="{ background: `${f.driver_color || '#2563eb'}22`, color: f.driver_color || '#2563eb' }"
-            >{{ f.driver_name[0] }}</div>
-            <div v-else class="w-7 h-7 rounded-full bg-stone-100/70 flex items-center justify-center flex-shrink-0">
-              <svg width="12" height="12" fill="#94a3b8" viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
+              :style="{
+                background: `${f.driver_color || '#2563eb'}22`,
+                color: f.driver_color || '#2563eb',
+              }"
+            >
+              {{ f.driver_name[0] }}
             </div>
-            <span class="text-sm font-semibold text-stone-800">{{ f.driver_name || 'Sem motorista' }}</span>
+            <div
+              v-else
+              class="w-7 h-7 rounded-full bg-stone-100/70 flex items-center justify-center flex-shrink-0"
+            >
+              <svg width="12" height="12" fill="#94a3b8" viewBox="0 0 24 24">
+                <path
+                  d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"
+                />
+              </svg>
+            </div>
+            <span class="text-sm font-semibold text-stone-800">{{
+              f.driver_name || "Sem motorista"
+            }}</span>
           </div>
 
           <!-- Placa -->
           <div>
-            <span class="font-mono text-xs font-bold text-stone-600 bg-stone-100/70 px-2 py-[3px] rounded-[5px]">{{ f.vehicle_plate }}</span>
+            <span
+              class="font-mono text-xs font-bold text-stone-600 bg-stone-100/70 px-2 py-[3px] rounded-[5px]"
+              >{{ f.vehicle_plate }}</span
+            >
           </div>
 
           <!-- Infração -->
           <div>
-            <span class="text-xs px-2 py-[3px] rounded-full font-semibold" :class="CATEGORY_COLORS[f.category]">
-              {{ CATEGORIES.find(c => c.value === f.category)?.label || f.category }}
+            <span
+              class="text-xs px-2 py-[3px] rounded-full font-semibold"
+              :class="CATEGORY_COLORS[f.category]"
+            >
+              {{
+                CATEGORIES.find((c) => c.value === f.category)?.label ||
+                f.category
+              }}
             </span>
-            <div v-if="f.description" class="text-[10.5px] text-slate-400 mt-0.5 truncate max-w-[160px]">{{ f.description }}</div>
+            <div
+              v-if="f.description"
+              class="text-[10.5px] text-slate-400 mt-0.5 truncate max-w-[160px]"
+            >
+              {{ f.description }}
+            </div>
           </div>
 
           <!-- Valor -->
@@ -299,13 +543,24 @@ onMounted(async () => {
           <!-- Data -->
           <div class="text-xs text-stone-600">
             <div>{{ fmtDate(f.fine_date) }}</div>
-            <div v-if="f.due_date" class="text-[10px] text-slate-400">Vence: {{ fmtDate(f.due_date) }}</div>
+            <div v-if="f.due_date" class="text-[10px] text-slate-400">
+              Vence: {{ fmtDate(f.due_date) }}
+            </div>
           </div>
 
           <!-- Status -->
           <div>
-            <span class="text-[11px] font-semibold px-2.5 py-[3px] rounded-full" :class="STATUS_COLORS[f.status]">
-              {{ f.status === 'pendente' ? '● Pendente' : f.status === 'pago' ? '✓ Pago' : '⚖ Recurso' }}
+            <span
+              class="text-[11px] font-semibold px-2.5 py-[3px] rounded-full"
+              :class="STATUS_COLORS[f.status]"
+            >
+              {{
+                f.status === "pendente"
+                  ? "● Pendente"
+                  : f.status === "pago"
+                    ? "✓ Pago"
+                    : "⚖ Recurso"
+              }}
             </span>
           </div>
 
@@ -316,84 +571,167 @@ onMounted(async () => {
               title="Visualizar"
               class="text-stone-600 bg-stone-100/70 hover:bg-stone-100 px-1.5 py-1 rounded-md transition-colors"
             >
-              <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+              <svg
+                width="12"
+                height="12"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"
+                />
+              </svg>
             </button>
             <button
               @click.stop="openEdit(f)"
               title="Editar"
               class="text-[10.5px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-1.5 py-1 rounded-md transition-colors"
             >
-              <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+              <svg
+                width="12"
+                height="12"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                />
+              </svg>
             </button>
             <button
               v-if="f.status === 'pendente'"
               @click="pay(f)"
               title="Marcar como pago"
               class="text-[10.5px] font-bold text-green-700 bg-green-50 hover:bg-green-100 px-2 py-1 rounded-md transition-colors"
-            >Pagar</button>
+            >
+              Pagar
+            </button>
             <button
               v-if="f.status === 'pendente'"
               @click="appeal(f)"
               title="Entrar em recurso"
               class="text-[10.5px] font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 px-2 py-1 rounded-md transition-colors"
-            >Recurso</button>
+            >
+              Recurso
+            </button>
             <button
               @click="del(f)"
               title="Remover"
               class="text-[10.5px] font-bold text-red-500 bg-red-50 hover:bg-red-100 px-2 py-1 rounded-md transition-colors"
-            >✕</button>
+            >
+              ✕
+            </button>
           </div>
         </div>
 
-        <div v-if="!filtered.length" class="text-center py-12"><div class="text-2xl mb-2">⌕</div><strong class="block text-sm text-stone-600">Nenhuma multa encontrada</strong><span class="text-xs text-stone-400">Tente limpar o código ou alterar o status.</span></div>
-        <TableFooter v-else :page="finePage" :pages="finePages" :total="filtered.length" :page-size="finePageSize" @update:page="finePage = $event" @update:page-size="finePageSize = $event" />
+        <div v-if="!filtered.length" class="text-center py-12">
+          <div class="text-2xl mb-2">⌕</div>
+          <strong class="block text-sm text-stone-600"
+            >Nenhuma multa encontrada</strong
+          ><span class="text-xs text-stone-400"
+            >Tente limpar o código ou alterar o status.</span
+          >
+        </div>
+        <TableFooter
+          v-else
+          :page="finePage"
+          :pages="finePages"
+          :total="filtered.length"
+          :page-size="finePageSize"
+          @update:page="finePage = $event"
+          @update:page-size="finePageSize = $event"
+        />
       </template>
     </div>
 
     <!-- ───── Modal Lançar Multa ───── -->
     <Teleport to="body">
-      <div v-if="showModal" class="fixed inset-0 z-[80] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/40" @click="showModal = false; resetForm()" />
-        <div class="relative glass-strong rounded-2xl w-full max-w-lg z-10 max-h-[90vh] overflow-y-auto">
-          <div class="flex items-center justify-between p-5 border-b border-stone-100">
-            <h3 class="text-base font-bold text-stone-800 m-0">{{ editingId ? 'Editar Multa' : 'Lançar Multa' }}</h3>
-            <button @click="showModal = false; resetForm()" class="text-slate-400 hover:text-stone-600">
-              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      <div
+        v-if="showModal"
+        class="fixed inset-0 z-[80] flex items-center justify-center p-4"
+      >
+        <div
+          class="absolute inset-0 bg-black/40"
+          @click="
+            showModal = false;
+            resetForm();
+          "
+        />
+        <div
+          class="relative glass-strong rounded-2xl w-full max-w-lg z-10 max-h-[90vh] overflow-y-auto"
+        >
+          <div
+            class="flex items-center justify-between p-5 border-b border-stone-100"
+          >
+            <h3 class="text-base font-bold text-stone-800 m-0">
+              {{ editingId ? "Editar Multa" : "Lançar Multa" }}
+            </h3>
+            <button
+              @click="
+                showModal = false;
+                resetForm();
+              "
+              class="text-slate-400 hover:text-stone-600"
+            >
+              <svg
+                width="20"
+                height="20"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                />
+              </svg>
             </button>
           </div>
 
           <div class="p-5 space-y-4">
             <!-- Motorista -->
             <div>
-              <label class="block text-xs font-bold text-stone-600 mb-1.5">Motorista</label>
+              <label class="block text-xs font-bold text-stone-600 mb-1.5"
+                >Motorista</label
+              >
               <select
                 v-model="form.driver_id"
                 @change="onDriverChange"
                 class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               >
                 <option value="">— Sem motorista vinculado —</option>
-                <option v-for="d in drivers" :key="d.id" :value="d.id">{{ d.name }}</option>
+                <option v-for="d in drivers" :key="d.id" :value="d.id">
+                  {{ d.name }}
+                </option>
               </select>
             </div>
 
             <!-- Placa -->
             <div>
-                <label for="fine-vehicle" class="block text-xs font-bold text-stone-600 mb-1.5">Placa do Veículo *</label>
+              <label
+                for="fine-vehicle"
+                class="block text-xs font-bold text-stone-600 mb-1.5"
+                >Placa do Veículo *</label
+              >
               <select
                 id="fine-vehicle"
                 v-model="form.vehicle_plate"
                 class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               >
                 <option value="">— Selecione a placa —</option>
-                <option v-for="p in allPlates" :key="p" :value="p">{{ p }}</option>
+                <option v-for="p in allPlates" :key="p" :value="p">
+                  {{ p }}
+                </option>
               </select>
-              <p class="text-[10.5px] text-slate-400 mt-1">A placa é preenchida automaticamente ao selecionar o motorista</p>
+              <p class="text-[10.5px] text-slate-400 mt-1">
+                A placa é preenchida automaticamente ao selecionar o motorista
+              </p>
             </div>
 
             <!-- Data multa + Vencimento -->
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-bold text-stone-600 mb-1.5">Data da Infração *</label>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5"
+                  >Data da Infração *</label
+                >
                 <input
                   v-model="form.fine_date"
                   type="date"
@@ -401,7 +739,11 @@ onMounted(async () => {
                 />
               </div>
               <div>
-                <label for="fine-due-date" class="block text-xs font-bold text-stone-600 mb-1.5">Vencimento</label>
+                <label
+                  for="fine-due-date"
+                  class="block text-xs font-bold text-stone-600 mb-1.5"
+                  >Vencimento</label
+                >
                 <input
                   id="fine-due-date"
                   v-model="form.due_date"
@@ -414,7 +756,11 @@ onMounted(async () => {
             <!-- Valor + Categoria -->
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label for="fine-value" class="block text-xs font-bold text-stone-600 mb-1.5">Valor (R$) *</label>
+                <label
+                  for="fine-value"
+                  class="block text-xs font-bold text-stone-600 mb-1.5"
+                  >Valor (R$) *</label
+                >
                 <input
                   id="fine-value"
                   v-model="form.value"
@@ -426,19 +772,31 @@ onMounted(async () => {
                 />
               </div>
               <div>
-                <label class="block text-xs font-bold text-stone-600 mb-1.5">Tipo de Infração</label>
+                <label class="block text-xs font-bold text-stone-600 mb-1.5"
+                  >Tipo de Infração</label
+                >
                 <select
                   v-model="form.category"
                   class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
-                  <option v-for="c in CATEGORIES" :key="c.value" :value="c.value">{{ c.label }}</option>
+                  <option
+                    v-for="c in CATEGORIES"
+                    :key="c.value"
+                    :value="c.value"
+                  >
+                    {{ c.label }}
+                  </option>
                 </select>
               </div>
             </div>
 
             <!-- Descrição -->
             <div>
-              <label for="fine-description" class="block text-xs font-bold text-stone-600 mb-1.5">Descrição / Código da Multa</label>
+              <label
+                for="fine-description"
+                class="block text-xs font-bold text-stone-600 mb-1.5"
+                >Descrição / Código da Multa</label
+              >
               <input
                 id="fine-description"
                 v-model="form.description"
@@ -450,7 +808,9 @@ onMounted(async () => {
 
             <!-- Obs -->
             <div>
-              <label class="block text-xs font-bold text-stone-600 mb-1.5">Observações</label>
+              <label class="block text-xs font-bold text-stone-600 mb-1.5"
+                >Observações</label
+              >
               <textarea
                 v-model="form.obs"
                 rows="2"
@@ -463,7 +823,13 @@ onMounted(async () => {
           </div>
 
           <div class="flex gap-3 px-5 pb-5">
-            <button @click="showModal = false; resetForm()" class="flex-1 border border-stone-200 text-stone-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-stone-50/50">
+            <button
+              @click="
+                showModal = false;
+                resetForm();
+              "
+              class="flex-1 border border-stone-200 text-stone-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-stone-50/50"
+            >
               Cancelar
             </button>
             <button
@@ -471,7 +837,13 @@ onMounted(async () => {
               :disabled="saving"
               class="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-bold py-2.5 rounded-lg transition-colors"
             >
-              {{ saving ? 'Salvando...' : editingId ? 'Salvar Alterações' : 'Registrar Multa' }}
+              {{
+                saving
+                  ? "Salvando..."
+                  : editingId
+                    ? "Salvar Alterações"
+                    : "Registrar Multa"
+              }}
             </button>
           </div>
         </div>
@@ -480,62 +852,161 @@ onMounted(async () => {
 
     <!-- Modal Visualizar Multa -->
     <Teleport to="body">
-      <div v-if="viewingFine" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="viewingFine = null">
-        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="viewingFine = null" />
-        <div class="relative glass-strong rounded-2xl w-full max-w-[520px] overflow-hidden">
-          <div class="px-7 py-5 bg-gradient-to-br from-[#1a1f2e] to-[#1e293b] flex items-center justify-between">
+      <div
+        v-if="viewingFine"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        @click.self="viewingFine = null"
+      >
+        <div
+          class="absolute inset-0 bg-black/50 backdrop-blur-sm"
+          @click="viewingFine = null"
+        />
+        <div
+          class="relative glass-strong rounded-2xl w-full max-w-[520px] overflow-hidden"
+        >
+          <div
+            class="px-7 py-5 bg-gradient-to-br from-[#1a1f2e] to-[#1e293b] flex items-center justify-between"
+          >
             <div>
-              <h3 class="m-0 text-[15px] font-bold text-white">Detalhes da Multa</h3>
-              <p class="mt-0.5 mb-0 text-xs text-slate-400">#{{ viewingFine.id }} — somente leitura</p>
+              <h3 class="m-0 text-[15px] font-bold text-white">
+                Detalhes da Multa
+              </h3>
+              <p class="mt-0.5 mb-0 text-xs text-slate-400">
+                #{{ viewingFine.id }} — somente leitura
+              </p>
             </div>
-            <button @click="viewingFine = null" class="text-slate-400 hover:text-white transition-colors">
-              <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            <button
+              @click="viewingFine = null"
+              class="text-slate-400 hover:text-white transition-colors"
+            >
+              <svg
+                width="18"
+                height="18"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                />
+              </svg>
             </button>
           </div>
           <div class="px-7 py-6 grid grid-cols-2 gap-4">
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Motorista</div>
-              <div class="text-sm font-semibold text-slate-800">{{ viewingFine.driver_name || '—' }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Motorista
+              </div>
+              <div class="text-sm font-semibold text-slate-800">
+                {{ viewingFine.driver_name || "—" }}
+              </div>
             </div>
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Placa</div>
-              <div class="text-sm font-semibold text-slate-800 font-mono">{{ viewingFine.vehicle_plate || '—' }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Placa
+              </div>
+              <div class="text-sm font-semibold text-slate-800 font-mono">
+                {{ viewingFine.vehicle_plate || "—" }}
+              </div>
             </div>
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Categoria</div>
-              <span class="text-xs font-bold px-2 py-1 rounded-full" :class="CATEGORY_COLORS[viewingFine.category] || 'bg-stone-100/70 text-stone-600'">
-                {{ CATEGORIES.find(c => c.value === viewingFine.category)?.label || viewingFine.category }}
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Categoria
+              </div>
+              <span
+                class="text-xs font-bold px-2 py-1 rounded-full"
+                :class="
+                  CATEGORY_COLORS[viewingFine.category] ||
+                  'bg-stone-100/70 text-stone-600'
+                "
+              >
+                {{
+                  CATEGORIES.find((c) => c.value === viewingFine.category)
+                    ?.label || viewingFine.category
+                }}
               </span>
             </div>
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status</div>
-              <span class="text-xs font-bold px-2 py-1 rounded-full capitalize" :class="STATUS_COLORS[viewingFine.status] || 'bg-stone-100/70 text-stone-600'">
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Status
+              </div>
+              <span
+                class="text-xs font-bold px-2 py-1 rounded-full capitalize"
+                :class="
+                  STATUS_COLORS[viewingFine.status] ||
+                  'bg-stone-100/70 text-stone-600'
+                "
+              >
                 {{ viewingFine.status }}
               </span>
             </div>
             <div class="col-span-2">
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Infração</div>
-              <div class="text-sm text-slate-800">{{ viewingFine.description || '—' }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Infração
+              </div>
+              <div class="text-sm text-slate-800">
+                {{ viewingFine.description || "—" }}
+              </div>
             </div>
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Valor</div>
-              <div class="text-lg font-extrabold text-red-600">{{ fmt(viewingFine.value) }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Valor
+              </div>
+              <div class="text-lg font-extrabold text-red-600">
+                {{ fmt(viewingFine.value) }}
+              </div>
             </div>
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Data da Infração</div>
-              <div class="text-sm font-semibold text-slate-800">{{ fmtDate(viewingFine.fine_date) }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Data da Infração
+              </div>
+              <div class="text-sm font-semibold text-slate-800">
+                {{ fmtDate(viewingFine.fine_date) }}
+              </div>
             </div>
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Vencimento</div>
-              <div class="text-sm font-semibold text-slate-800">{{ fmtDate(viewingFine.due_date) }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Vencimento
+              </div>
+              <div class="text-sm font-semibold text-slate-800">
+                {{ fmtDate(viewingFine.due_date) }}
+              </div>
             </div>
             <div v-if="viewingFine.obs" class="col-span-2">
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Observação</div>
-              <div class="text-sm text-stone-600 rounded-lg p-3 bg-stone-50 border border-stone-100">{{ viewingFine.obs }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Observação
+              </div>
+              <div
+                class="text-sm text-stone-600 rounded-lg p-3 bg-stone-50 border border-stone-100"
+              >
+                {{ viewingFine.obs }}
+              </div>
             </div>
           </div>
           <div class="px-7 py-4 border-t border-stone-100 flex justify-end">
-            <button @click="viewingFine = null" class="px-5 py-2 bg-stone-100/70 hover:bg-stone-100 text-stone-700 text-sm font-semibold rounded-lg transition-colors">Fechar</button>
+            <button
+              @click="viewingFine = null"
+              class="px-5 py-2 bg-stone-100/70 hover:bg-stone-100 text-stone-700 text-sm font-semibold rounded-lg transition-colors"
+            >
+              Fechar
+            </button>
           </div>
         </div>
       </div>
