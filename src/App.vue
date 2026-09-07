@@ -2,6 +2,7 @@
 import { defineAsyncComponent, onMounted, provide, ref } from "vue";
 import AppSidebar from "./components/layout/AppSidebar.vue";
 import AppTopbar from "./components/layout/AppTopbar.vue";
+import ChatDrawer from "./components/ui/ChatDrawer.vue";
 import ConfirmDialog from "./components/ui/ConfirmDialog.vue";
 import Toast from "./components/ui/Toast.vue";
 import { useAuth } from "./composables/useAuth";
@@ -198,5 +199,6 @@ onMounted(async () => {
     </main>
     <Toast />
     <ConfirmDialog />
+    <ChatDrawer />
   </div>
 </template>

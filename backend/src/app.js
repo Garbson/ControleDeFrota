@@ -23,6 +23,7 @@ const tripsRoutes     = require('./routes/trips')
 const usersRoutes      = require('./routes/users')
 const suppliersRoutes  = require('./routes/suppliers')
 const auditRoutes       = require('./routes/audit')
+const chatRoutes        = require('./routes/chat')
 
 const app = express()
 
@@ -76,6 +77,7 @@ app.use('/api/trips',      tripsRoutes)
 app.use('/api/users',      usersRoutes)
 app.use('/api/suppliers',  suppliersRoutes)
 app.use('/api/audit',      auditRoutes)
+app.use('/api/chat',       chatRoutes)
 
 // ── 404
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada' }))

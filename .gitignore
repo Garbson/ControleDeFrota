@@ -4,3 +4,11 @@ dist
 *.local
 playwright-report/
 test-results/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example

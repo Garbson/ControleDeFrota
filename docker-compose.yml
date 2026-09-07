@@ -55,6 +55,8 @@ services:
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
       R2_FILES_BUCKET: ${R2_FILES_BUCKET:-controlefrota-files}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CHAT_MODEL: ${CHAT_MODEL:-claude-haiku-4-5-20251001}
     depends_on:
       controlefrota-mysql:
         condition: service_healthy
