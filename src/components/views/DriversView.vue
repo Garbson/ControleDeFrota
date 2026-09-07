@@ -5,6 +5,8 @@ import { useVehicles } from '../../composables/useVehicles'
 import { usePayable } from '../../composables/usePayable'
 import { api } from '../../composables/useApi'
 import { useConfirm } from '../../composables/useConfirm'
+import { printTable } from '../../utils/printTable'
+import { exportExcelGeneric } from '../../utils/exportTable'
 
 const props = defineProps({ showToast: Function })
 
@@ -20,6 +22,8 @@ const expCurrentPage = ref(1)
 const expPerPage = 10
 const expCategoryFilter = ref('')
 const expSearchFilter = ref('')
+const expDateFrom = ref('')
+const expDateTo = ref('')
 
 const expFilteredDespesas = computed(() => {
   let list = despesas.value
@@ -34,10 +38,38 @@ const expFilteredDespesas = computed(() => {
       (d.supplier_name_free || '').toLowerCase().includes(q)
     )
   }
+  if (expDateFrom.value) {
+    list = list.filter(d => (d.due_date || '').substring(0, 10) >= expDateFrom.value)
+  }
+  if (expDateTo.value) {
+    list = list.filter(d => (d.due_date || '').substring(0, 10) <= expDateTo.value)
+  }
   return list
 })
 
 const despesasTotal = computed(() => expFilteredDespesas.value.reduce((s, d) => s + Number(d.value || 0), 0))
+
+function buildDriverExpenseExportData() {
+  return {
+    title: `Despesas — ${expenseDriverName.value}`,
+    subtitle: expCategoryFilter.value ? `Categoria: ${expCategoryFilter.value}` : null,
+    headers: ['Data', 'Descrição', 'Categoria', 'Fornecedor', 'Status', 'Valor'],
+    rows: expFilteredDespesas.value.map(d => ({ type: 'row', data: [
+      fmtDate(d.due_date),
+      d.description || '—',
+      d.category,
+      d.supplier_name || d.supplier_name_free || '—',
+      d.status,
+      Number(d.value || 0),
+    ]})),
+    totalLabel: 'Total',
+    totalValue: despesasTotal.value,
+    moneyCols: [5],
+  }
+}
+function handleDriverExpPrint() { printTable({ ...buildDriverExpenseExportData(), totals: { label: 'Total', value: despesasTotal.value } }) }
+function handleDriverExpExcel() { exportExcelGeneric(buildDriverExpenseExportData()) }
+
 const expPaginatedItems = computed(() => {
   const start = (expCurrentPage.value - 1) * expPerPage
   return expFilteredDespesas.value.slice(start, start + expPerPage)
@@ -53,6 +85,8 @@ async function openDriverExpenses(driver) {
   expCurrentPage.value = 1
   expCategoryFilter.value = ''
   expSearchFilter.value = ''
+  expDateFrom.value = ''
+  expDateTo.value = ''
   despesas.value = await fetchExpenses({ driver_id: driver.id })
   showExpenses.value = true
 }
@@ -549,8 +583,24 @@ onMounted(() => {
               </button>
             </div>
           </div>
-          <div class="px-7 py-3 border-b border-stone-100 flex items-center gap-3 flex-wrap">
-            <input v-model="expSearchFilter" @input="expCurrentPage = 1" type="text" placeholder="Buscar descrição ou fornecedor..." class="finput max-w-[260px] text-xs" />
+          <div class="px-7 py-3 border-b border-stone-100 flex flex-col gap-2">
+            <div class="flex items-center gap-3 flex-wrap">
+              <input v-model="expSearchFilter" @input="expCurrentPage = 1" type="text" placeholder="Buscar descrição ou fornecedor..." class="finput max-w-[220px] text-xs" />
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] font-bold text-slate-400">DE</span>
+                <input v-model="expDateFrom" @input="expCurrentPage = 1" type="date" class="finput text-xs w-[130px]" />
+                <span class="text-[10px] font-bold text-slate-400">ATÉ</span>
+                <input v-model="expDateTo" @input="expCurrentPage = 1" type="date" class="finput text-xs w-[130px]" />
+              </div>
+              <div class="flex items-center gap-1.5 ml-auto">
+                <button @click="handleDriverExpPrint" class="sbtn flex items-center gap-1" title="Imprimir / PDF">
+                  <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+                  PDF
+                </button>
+                <button @click="handleDriverExpExcel" class="sbtn flex items-center gap-1" title="Exportar Excel">Excel</button>
+                <span class="text-[10px] text-slate-400">{{ expFilteredDespesas.length }} resultado{{ expFilteredDespesas.length !== 1 ? 's' : '' }}</span>
+              </div>
+            </div>
             <div class="flex items-center gap-1.5 flex-wrap">
               <button class="sbtn" :class="{ on: !expCategoryFilter }" @click="expCategoryFilter = ''; expCurrentPage = 1">Todos</button>
               <button class="sbtn" :class="{ on: expCategoryFilter === 'manutencao' }" @click="expCategoryFilter = 'manutencao'; expCurrentPage = 1">Manutenção</button>
@@ -561,7 +611,6 @@ onMounted(() => {
               <button class="sbtn" :class="{ on: expCategoryFilter === 'combustivel' }" @click="expCategoryFilter = 'combustivel'; expCurrentPage = 1">Combustível</button>
               <button class="sbtn" :class="{ on: expCategoryFilter === 'outros' }" @click="expCategoryFilter = 'outros'; expCurrentPage = 1">Outros</button>
             </div>
-            <span class="text-[10px] text-slate-400 ml-auto">{{ expFilteredDespesas.length }} resultado{{ expFilteredDespesas.length !== 1 ? 's' : '' }}</span>
           </div>
           <div class="max-h-[60vh] overflow-y-auto overflow-x-auto">
             <table v-if="expFilteredDespesas.length" class="w-full border-collapse min-w-[700px]">

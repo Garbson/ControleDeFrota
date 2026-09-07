@@ -31,20 +31,56 @@ const invoiceUpload = multer({
 
 router.get('/', async (req, res) => {
   try {
-    const { status } = req.query
+    const { status, item_type, stock_location_id } = req.query
     let sql = `
-      SELECT si.*, s.name AS supplier_name
+      SELECT si.*, s.name AS supplier_name, sl.name AS location_name
       FROM stock_items si
       LEFT JOIN suppliers s ON s.id = si.supplier_id
+      LEFT JOIN stock_locations sl ON sl.id = si.stock_location_id
       WHERE 1=1
     `
     const params = []
     if (status) { sql += ' AND si.status = ?'; params.push(status) }
+    if (item_type) { sql += ' AND si.item_type = ?'; params.push(item_type) }
+    if (stock_location_id) { sql += ' AND si.stock_location_id = ?'; params.push(stock_location_id) }
     sql += ' ORDER BY si.qty DESC'
     const rows = await query(sql, params)
     res.json(await attachAccessUrls(rows, ['invoice_url']))
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar estoque' })
+  }
+})
+
+// ── Locais de estoque
+router.get('/locations', async (req, res) => {
+  try {
+    const rows = await query('SELECT * FROM stock_locations ORDER BY name')
+    res.json(rows)
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar locais' })
+  }
+})
+
+router.post('/locations', [body('name').notEmpty().trim()], async (req, res) => {
+  const errors = validationResult(req)
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() })
+  try {
+    const result = await query('INSERT INTO stock_locations (name) VALUES (?)', [req.body.name.trim()])
+    res.status(201).json({ id: result.insertId, name: req.body.name.trim() })
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Local já existe' })
+    res.status(500).json({ error: 'Erro ao criar local' })
+  }
+})
+
+router.delete('/locations/:id', async (req, res) => {
+  try {
+    const [{ count }] = await query('SELECT COUNT(*) AS count FROM stock_items WHERE stock_location_id = ?', [req.params.id])
+    if (count > 0) return res.status(409).json({ error: `Local possui ${count} item(ns). Mova antes de excluir.` })
+    await query('DELETE FROM stock_locations WHERE id = ?', [req.params.id])
+    res.json({ message: 'Local removido' })
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao remover local' })
   }
 })
 
@@ -59,11 +95,12 @@ router.post(
     const errors = validationResult(req)
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() })
 
-    const { description, brand, nf_number, status, qty, unit_price, supplier_id, entry_date } = req.body
+    const { description, brand, nf_number, status, qty, unit_price, supplier_id, entry_date, item_type, stock_location_id } = req.body
+    if (!stock_location_id) return res.status(400).json({ error: 'Local do estoque é obrigatório' })
     try {
       const result = await query(
-        'INSERT INTO stock_items (description, brand, nf_number, status, qty, unit_price, supplier_id, entry_date) VALUES (?,?,?,?,?,?,?,?)',
-        [description, brand || null, nf_number || null, status, qty, unit_price || null, supplier_id || null, entry_date || null]
+        'INSERT INTO stock_items (description, item_type, stock_location_id, brand, nf_number, status, qty, unit_price, supplier_id, entry_date) VALUES (?,?,?,?,?,?,?,?,?,?)',
+        [description, item_type || 'pneu', stock_location_id, brand || null, nf_number || null, status, qty, unit_price || null, supplier_id || null, entry_date || null]
       )
       res.status(201).json({ id: result.insertId, message: 'Item criado' })
     } catch (err) {
@@ -73,11 +110,11 @@ router.post(
 )
 
 router.put('/:id', async (req, res) => {
-  const { description, brand, nf_number, status, qty, unit_price } = req.body
+  const { description, brand, nf_number, status, qty, unit_price, stock_location_id } = req.body
   try {
     await query(
-      'UPDATE stock_items SET description=?, brand=?, nf_number=?, status=?, qty=?, unit_price=? WHERE id=?',
-      [description, brand || null, nf_number || null, status, qty, unit_price || null, req.params.id]
+      'UPDATE stock_items SET description=?, brand=?, nf_number=?, status=?, qty=?, unit_price=?, stock_location_id=COALESCE(?, stock_location_id) WHERE id=?',
+      [description, brand || null, nf_number || null, status, qty, unit_price || null, stock_location_id || null, req.params.id]
     )
     res.json({ message: 'Item atualizado' })
   } catch (err) {
@@ -104,16 +141,19 @@ router.get('/movements', async (req, res) => {
   try {
     const { type } = req.query
     let sql = `
-      SELECT m.*, d.name AS driver_name, v.plate AS vehicle_plate, si.description AS item_name
+      SELECT m.*, d.name AS driver_name, v.plate AS vehicle_plate, si.description AS item_name, sl.name AS location_name
       FROM movements m
       LEFT JOIN drivers d ON d.id = m.driver_id
       LEFT JOIN vehicles v ON v.id = m.vehicle_id
       LEFT JOIN stock_items si ON si.id = m.stock_item_id
+      LEFT JOIN stock_locations sl ON sl.id = si.stock_location_id
       WHERE 1=1
     `
     const params = []
     if (type) { sql += ' AND m.type = ?'; params.push(type) }
     if (req.query.stock_item_id) { sql += ' AND m.stock_item_id = ?'; params.push(req.query.stock_item_id) }
+    if (req.query.item_type) { sql += ' AND si.item_type = ?'; params.push(req.query.item_type) }
+    if (req.query.stock_location_id) { sql += ' AND si.stock_location_id = ?'; params.push(req.query.stock_location_id) }
     sql += ' ORDER BY m.mov_date DESC LIMIT 50'
     res.json(await query(sql, params))
   } catch (err) {

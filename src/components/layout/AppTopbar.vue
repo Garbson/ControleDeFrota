@@ -25,6 +25,10 @@ const pageInfo = computed(() => {
       title: "Estoque de Pneus",
       subtitle: "Controle de pneus em estoque e notas fiscais",
     },
+    parts: {
+      title: "Estoque de Peças",
+      subtitle: "Controle de peças e componentes em estoque",
+    },
     fuel: {
       title: "Combustível",
       subtitle: "Controle de abastecimento por motorista e veículo",

@@ -44,6 +44,9 @@ const ReportView = defineAsyncComponent(
 const StockView = defineAsyncComponent(
   () => import("./components/views/StockView.vue"),
 );
+const PartsStockView = defineAsyncComponent(
+  () => import("./components/views/PartsStockView.vue"),
+);
 const SuppliersView = defineAsyncComponent(
   () => import("./components/views/SuppliersView.vue"),
 );
@@ -156,6 +159,10 @@ onMounted(async () => {
         />
         <StockView
           v-else-if="currentView === 'stock'"
+          :show-toast="showToast"
+        />
+        <PartsStockView
+          v-else-if="currentView === 'parts'"
           :show-toast="showToast"
         />
         <SuppliersView

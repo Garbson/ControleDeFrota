@@ -1858,9 +1858,9 @@ onMounted(() => {
         </table>
       </template>
 
-      <!-- Combustível -->
-      <div v-if="printingTrip.regular_fuel_records?.length" style="display: flex; gap: 12px; align-items: flex-start">
-        <div style="flex:1">
+      <!-- Combustível e Thermo King lado a lado -->
+      <div v-if="printingTrip.regular_fuel_records?.length || printingTrip.thermo_king_records?.length" style="display: flex; gap: 12px; align-items: flex-start">
+        <div v-if="printingTrip.regular_fuel_records?.length" style="flex:1">
           <h3 class="trip-print-section">Combustível</h3>
           <table>
             <thead>
@@ -1898,11 +1898,8 @@ onMounted(() => {
             </tfoot>
           </table>
         </div>
-      </div>
 
-      <!-- Thermo King e ARLA lado a lado -->
-      <div v-if="printingTrip.thermo_king_records?.length || printingTrip.arla_records?.length" style="display: flex; gap: 12px; align-items: flex-start">
-        <div v-if="printingTrip.thermo_king_records?.length" style="flex: 1">
+        <div v-if="printingTrip.thermo_king_records?.length" style="flex: 1; max-width: 340px">
           <h3 class="trip-print-section">❄️ Diesel Termo King</h3>
           <table>
             <thead>
@@ -1935,41 +1932,42 @@ onMounted(() => {
             </tfoot>
           </table>
         </div>
-
-        <div v-if="printingTrip.arla_records?.length" style="flex: 1">
-          <h3 class="trip-print-section">🧪 Arla 32</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Litros</th>
-                <th>Preço/L</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="f in printingTrip.arla_records" :key="f.id">
-                <td>{{ fmtDate(f.fuel_date) }}</td>
-                <td>{{ Number(f.liters).toFixed(2) }} L</td>
-                <td>R$ {{ Number(f.price_liter).toFixed(3) }}</td>
-                <td>
-                  <strong>R$ {{ fmt(f.total) }}</strong>
-                </td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr>
-                <td><strong>Total Arla</strong></td>
-                <td><strong>{{ Number(printingTrip.arla_liters).toFixed(2) }} L</strong></td>
-                <td></td>
-                <td>
-                  <strong>R$ {{ fmt(printingTrip.arla_total) }}</strong>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
       </div>
+
+      <!-- ARLA 32 embaixo -->
+      <template v-if="printingTrip.arla_records?.length">
+        <h3 class="trip-print-section">🧪 Arla 32</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Litros</th>
+              <th>Preço/L</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="f in printingTrip.arla_records" :key="f.id">
+              <td>{{ fmtDate(f.fuel_date) }}</td>
+              <td>{{ Number(f.liters).toFixed(2) }} L</td>
+              <td>R$ {{ Number(f.price_liter).toFixed(3) }}</td>
+              <td>
+                <strong>R$ {{ fmt(f.total) }}</strong>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td><strong>Total Arla</strong></td>
+              <td><strong>{{ Number(printingTrip.arla_liters).toFixed(2) }} L</strong></td>
+              <td></td>
+              <td>
+                <strong>R$ {{ fmt(printingTrip.arla_total) }}</strong>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </template>
 
       <!-- Despesas -->
       <template v-if="printingTrip.payable_expenses?.length">
