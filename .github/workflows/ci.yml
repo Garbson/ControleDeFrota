@@ -76,6 +76,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [backend-test, frontend-build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    concurrency:
+      group: deploy-vps-main
+      cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@v4
