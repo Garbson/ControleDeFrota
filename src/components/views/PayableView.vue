@@ -226,12 +226,14 @@ const catText = { manutencao: '#c2410c', pecas: '#1d4ed8', pneus: '#15803d', adm
 
 const filteredCP = computed(() => {
   let list = [...items.value]
+  const dueDate = item => String(item.due_date || '').slice(0, 10)
+  const issueDate = item => String(item.issue_date || '').slice(0, 10)
   if (cpFilter.value !== 'all') list = list.filter(c => c.status === cpFilter.value)
   if (cpCatFilter.value !== 'all') list = list.filter(c => c.category === cpCatFilter.value)
-  if (cpDateFrom.value) list = list.filter(c => (c.due_date || '') >= cpDateFrom.value)
-  if (cpDateTo.value) list = list.filter(c => (c.due_date || '') <= cpDateTo.value)
-  if (cpIssueDateFrom.value) list = list.filter(c => (c.issue_date || '') >= cpIssueDateFrom.value)
-  if (cpIssueDateTo.value) list = list.filter(c => (c.issue_date || '') <= cpIssueDateTo.value + 'T23:59:59')
+  if (cpDateFrom.value) list = list.filter(c => dueDate(c) >= cpDateFrom.value)
+  if (cpDateTo.value) list = list.filter(c => dueDate(c) <= cpDateTo.value)
+  if (cpIssueDateFrom.value) list = list.filter(c => issueDate(c) >= cpIssueDateFrom.value)
+  if (cpIssueDateTo.value) list = list.filter(c => issueDate(c) <= cpIssueDateTo.value)
   if (cpSort.value === 'valor-desc') list.sort((a, b) => Number(b.value) - Number(a.value))
   else if (cpSort.value === 'valor-asc') list.sort((a, b) => Number(a.value) - Number(b.value))
   return list
@@ -404,10 +406,13 @@ onMounted(() => {
         </div>
         <!-- linha 2: período + ordenação -->
         <div class="flex gap-2 items-center flex-wrap">
-          <span class="text-xs font-bold text-slate-500">PERÍODO:</span>
-          <input v-model="cpDateFrom" type="date" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
+          <span class="text-xs font-bold text-slate-500">VENCIMENTO:</span>
+          <label class="flex items-center gap-1 text-xs text-slate-500">De
+            <input v-model="cpDateFrom" type="date" aria-label="Vencimento de" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
+          </label>
           <span class="text-xs text-slate-400">até</span>
-          <input v-model="cpDateTo" type="date" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
+          <label class="sr-only" for="payable-due-to">Vencimento até</label>
+          <input id="payable-due-to" v-model="cpDateTo" type="date" aria-label="Vencimento até" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
           <button
             v-if="cpDateFrom || cpDateTo"
             @click="cpDateFrom = ''; cpDateTo = ''"
@@ -415,9 +420,12 @@ onMounted(() => {
           >limpar</button>
           <div class="w-px h-5 bg-stone-200" />
           <span class="text-xs font-bold text-slate-500">EMISSÃO:</span>
-          <input v-model="cpIssueDateFrom" type="date" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
+          <label class="flex items-center gap-1 text-xs text-slate-500">De
+            <input v-model="cpIssueDateFrom" type="date" aria-label="Emissão de" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
+          </label>
           <span class="text-xs text-slate-400">até</span>
-          <input v-model="cpIssueDateTo" type="date" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
+          <label class="sr-only" for="payable-issue-to">Emissão até</label>
+          <input id="payable-issue-to" v-model="cpIssueDateTo" type="date" aria-label="Emissão até" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
           <button
             v-if="cpIssueDateFrom || cpIssueDateTo"
             @click="cpIssueDateFrom = ''; cpIssueDateTo = ''"
