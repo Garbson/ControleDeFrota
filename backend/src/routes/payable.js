@@ -62,7 +62,9 @@ router.get('/', async (req, res) => {
   try {
     const { status, category, from, to } = req.query
     let sql = `
-      SELECT ap.*, d.name AS driver_name, v.plate AS vehicle_plate,
+      SELECT ap.*,
+             COALESCE(d.name, ap.driver_name_free, 'Sem motorista') AS driver_name,
+             COALESCE(v.plate, ap.vehicle_plate_free, 'Sem placa') AS vehicle_plate,
              COALESCE(s.name, ap.supplier_name_free) AS supplier_name,
              CONCAT(t.origin, ' → ', t.destination) AS trip_label
       FROM accounts_payable ap
@@ -117,25 +119,28 @@ router.post(
     body('value').isFloat({ gt: 0 }).withMessage('Valor inválido'),
     body('due_date').isDate().withMessage('Data de vencimento inválida'),
     body('category').notEmpty(),
+    body('description').trim().notEmpty().withMessage('Descrição precisa ser preenchida'),
   ],
   async (req, res) => {
     const errors = validationResult(req)
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() })
 
-    const { document, description, supplier_id, supplier_name_free, driver_id, vehicle_id, trip_id, category, value, issue_date, due_date, obs } = req.body
+    const { document, description, supplier_id, supplier_name_free, vehicle_plate_free, driver_name_free, driver_id, vehicle_id, trip_id, category, value, issue_date, due_date, obs } = req.body
     try {
       // Auto-detecta viagem ativa se não vier trip_id explícito
       const refDate = issue_date || due_date
       const resolvedTripId = trip_id || await findActiveTrip(driver_id, refDate)
       // supplier_name_free só é salvo quando não há supplier_id
       const resolvedFree = supplier_id ? null : (supplier_name_free || null)
+      const resolvedDriverName = driver_id ? null : (driver_name_free || null)
+      const resolvedVehiclePlate = vehicle_id ? null : (vehicle_plate_free || null)
 
       const result = await query(
         `INSERT INTO accounts_payable
-          (document, description, supplier_id, supplier_name_free, driver_id, vehicle_id, trip_id, category, value, issue_date, due_date, obs)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+          (document, description, supplier_id, supplier_name_free, driver_id, driver_name_free, vehicle_id, vehicle_plate_free, trip_id, category, value, issue_date, due_date, obs)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [document || null, description || null, supplier_id || null, resolvedFree,
-        driver_id || null, vehicle_id || null, resolvedTripId || null, category, value, issue_date || null, due_date, obs || null]
+        driver_id || null, resolvedDriverName, vehicle_id || null, resolvedVehiclePlate, resolvedTripId || null, category, value, issue_date || null, due_date, obs || null]
       )
       res.status(201).json({ id: result.insertId, message: 'Conta criada' })
     } catch (err) {
@@ -164,17 +169,21 @@ router.patch('/:id/pay', async (req, res) => {
 })
 
 // PUT /payable/:id
-router.put('/:id', async (req, res) => {
-  const { document, description, supplier_id, supplier_name_free, driver_id, vehicle_id, trip_id, category, value, issue_date, due_date, status, obs } = req.body
+router.put('/:id', [body('description').trim().notEmpty().withMessage('Descrição precisa ser preenchida')], async (req, res) => {
+  const errors = validationResult(req)
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() })
+  const { document, description, supplier_id, supplier_name_free, vehicle_plate_free, driver_name_free, driver_id, vehicle_id, trip_id, category, value, issue_date, due_date, status, obs } = req.body
   const resolvedFree = supplier_id ? null : (supplier_name_free || null)
+  const resolvedDriverName = driver_id ? null : (driver_name_free || null)
+  const resolvedVehiclePlate = vehicle_id ? null : (vehicle_plate_free || null)
   try {
     await query(
       `UPDATE accounts_payable SET
-        document=?, description=?, supplier_id=?, supplier_name_free=?, driver_id=?, vehicle_id=?, trip_id=?,
+        document=?, description=?, supplier_id=?, supplier_name_free=?, driver_id=?, driver_name_free=?, vehicle_id=?, vehicle_plate_free=?, trip_id=?,
         category=?, value=?, issue_date=?, due_date=?, status=?, obs=?
        WHERE id=?`,
-      [document || null, description || null, supplier_id || null, resolvedFree, driver_id || null,
-      vehicle_id || null, trip_id || null, category, value, issue_date || null, due_date, status, obs || null, req.params.id]
+      [document || null, description || null, supplier_id || null, resolvedFree, driver_id || null, resolvedDriverName,
+      vehicle_id || null, resolvedVehiclePlate, trip_id || null, category, value, issue_date || null, due_date, status, obs || null, req.params.id]
     )
     if (status === 'pago') {
       await query("UPDATE fines SET status='pago', paid_date=COALESCE(paid_date, CURDATE()) WHERE account_payable_id=?", [req.params.id])

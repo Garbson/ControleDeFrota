@@ -5,6 +5,7 @@ import { useDrivers } from "../../composables/useDrivers";
 import { usePayable } from "../../composables/usePayable";
 import { useSuppliers } from "../../composables/useSuppliers";
 import { useVehicles } from "../../composables/useVehicles";
+import { findVehicleByPlate } from "../../utils/findVehicleByPlate";
 
 const props = defineProps({ showToast: Function });
 const { drivers, fetchAll: fetchDrivers } = useDrivers();
@@ -27,7 +28,6 @@ const form = ref({
   document: "",
   description: "",
   obs: "",
-  plate: "",
   vehicle_id: "",
   supplier_id: "",
   supplier_name_free: null,
@@ -77,54 +77,29 @@ const fileSize = computed(() =>
     : "",
 );
 
-// ── Placa: auto-preenche com a placa do motorista selecionado
-const plateInput = ref("");
-const plateSuggestions = computed(() => {
-  if (!plateInput.value) return vehicles.value.slice(0, 15);
-  const q = plateInput.value.toLowerCase();
-  return vehicles.value
-    .filter((v) => v.plate.toLowerCase().includes(q))
-    .slice(0, 15);
-});
+// ── Fornecedor: busca por nome ou CNPJ
+const supplierSearch = ref("");
+const motoristaPesquisa = ref("");
+const vehiclePlateSearch = ref("");
+const noDriver = ref(false);
+const noVehicle = ref(false);
 
+// Placa: ao escolher um motorista cadastrado com caminhão, preenche a placa dele
 watch(
   () => form.value.driver_id,
   (newId) => {
-    if (!newId || newId === "__outros__") {
-      form.value.plate = "";
-      form.value.vehicle_id = "";
-      plateInput.value = "";
-      return;
-    }
+    if (!newId) return;
     const driver = drivers.value.find((d) => d.id == newId);
-    if (driver?.truck_plate) {
-      form.value.plate = driver.truck_plate;
-      plateInput.value = driver.truck_plate;
-      // busca o vehicle_id correspondente
-      const v = vehicles.value.find((v) => v.plate === driver.truck_plate);
-      form.value.vehicle_id = v?.id || "";
-    } else {
-      form.value.plate = "";
-      form.value.vehicle_id = "";
-      plateInput.value = "";
-    }
+    if (!driver?.truck_plate) return;
+    const v = vehicles.value.find((v) => v.plate === driver.truck_plate);
+    vehiclePlateSearch.value = driver.truck_plate;
+    form.value.vehicle_id = v?.id || "";
+    noVehicle.value = false;
   },
 );
-
-function selectPlate(plate) {
-  const normalized = String(plate || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9-]/g, "")
-    .slice(0, 8);
-  plateInput.value = normalized;
-  form.value.plate = normalized;
-  const v = vehicles.value.find((v) => v.plate === normalized);
-  form.value.vehicle_id = v?.id || "";
-}
-
-// ── Fornecedor: busca por nome ou CNPJ
-const supplierSearch = ref("");
 const showSupplierDropdown = ref(false);
+const showMotoristaDropdown = ref(false);
+const showVehicleDropdown = ref(false);
 const supplierCreating = ref(false);
 
 const supplierExactMatch = computed(() => {
@@ -150,9 +125,55 @@ const supplierFiltered = computed(() => {
   return matches;
 });
 
+const driverFiltered = computed(() => {
+  if (!motoristaPesquisa.value) return drivers.value.slice(0, 15);
+  const q = motoristaPesquisa.value.toLowerCase();
+  const matches = drivers.value
+    .filter((s) => s.name.toLowerCase().includes(q))
+    .slice(0, 15);
+  return matches;
+});
+
+const vehicleFiltered = computed(() => {
+  if (!vehiclePlateSearch.value) return vehicles.value.slice(0, 15);
+  const q = vehiclePlateSearch.value.toLowerCase();
+  const matches = vehicles.value
+    .filter((s) => s.plate.toLowerCase().includes(q))
+    .slice(0, 15);
+  return matches;
+});
+
 const showCreateOption = computed(() => {
   return supplierSearch.value.trim().length >= 2 && !supplierExactMatch.value;
 });
+
+function selectDriver(s) {
+  motoristaPesquisa.value = s.name;
+  form.value.driver_id = s.id;
+  noDriver.value = false;
+  showMotoristaDropdown.value = false;
+}
+
+function selectNoDriver() {
+  motoristaPesquisa.value = "Sem motorista";
+  form.value.driver_id = "";
+  noDriver.value = true;
+  showMotoristaDropdown.value = false;
+}
+
+function selectVehicle(s) {
+  vehiclePlateSearch.value = s.plate;
+  form.value.vehicle_id = s.id;
+  noVehicle.value = false;
+  showVehicleDropdown.value = false;
+}
+
+function selectNoVehicle() {
+  vehiclePlateSearch.value = "Sem placa";
+  form.value.vehicle_id = "";
+  noVehicle.value = true;
+  showVehicleDropdown.value = false;
+}
 
 function selectSupplier(s) {
   supplierSearch.value = s.name;
@@ -182,9 +203,33 @@ function clearSupplier() {
   form.value.supplier_id = "";
 }
 
+function clearDriver() {
+  motoristaPesquisa.value = "";
+  form.value.driver_id = "";
+  noDriver.value = false;
+}
+
+function clearVehicle() {
+  vehiclePlateSearch.value = "";
+  form.value.vehicle_id = "";
+  noVehicle.value = false;
+}
+
 function blurSupplier() {
   setTimeout(() => {
     showSupplierDropdown.value = false;
+  }, 200);
+}
+
+function blurDriver() {
+  setTimeout(() => {
+    showMotoristaDropdown.value = false;
+  }, 200);
+}
+
+function blurVehiclePlate() {
+  setTimeout(() => {
+    showVehicleDropdown.value = false;
   }, 200);
 }
 
@@ -204,7 +249,11 @@ const isOutros = computed(() => form.value.driver_id === "__outros__");
 
 const formDriverName = computed(() => {
   if (isOutros.value) return "Outros";
-  return drivers.value.find((d) => d.id == form.value.driver_id)?.name || "";
+  if (noDriver.value) return "Sem motorista";
+  return (
+    drivers.value.find((d) => d.id == form.value.driver_id)?.name ||
+    motoristaPesquisa.value.trim()
+  );
 });
 
 const formSupplierName = computed(() => {
@@ -217,10 +266,26 @@ const formSupplierName = computed(() => {
 const supplierValid = computed(() =>
   Boolean(form.value.supplier_id || supplierSearch.value.trim().length >= 2),
 );
+const driverValid = computed(() =>
+  Boolean(
+    form.value.driver_id ||
+      noDriver.value ||
+      motoristaPesquisa.value.trim().length >= 2,
+  ),
+);
+const vehicleValid = computed(() =>
+  Boolean(
+    form.value.vehicle_id ||
+      noVehicle.value ||
+      vehiclePlateSearch.value.trim().length >= 2,
+  ),
+);
 const formValid = computed(
   () =>
-    form.value.driver_id &&
+    driverValid.value &&
     form.value.type &&
+    vehicleValid.value &&
+    form.value.description &&
     Number(form.value.value) > 0 &&
     form.value.date &&
     supplierValid.value &&
@@ -280,10 +345,23 @@ async function submitExpense() {
     const category = getCategory();
     const description = form.value.description || expenseTypes[form.value.type];
     const driverId = isOutros.value ? null : form.value.driver_id || null;
+
     const supplierId = form.value.supplier_id || null;
     const supplierFree = supplierId
       ? null
       : supplierSearch.value.trim() || null;
+    const driverFree =
+      driverId || noDriver.value ? null : motoristaPesquisa.value.trim() || null;
+    const vehicleId =
+      form.value.vehicle_id ||
+      (noVehicle.value
+        ? null
+        : findVehicleByPlate(vehicles.value, vehiclePlateSearch.value)?.id) ||
+      null;
+    const vehicleFree =
+      vehicleId || noVehicle.value
+        ? null
+        : vehiclePlateSearch.value.trim().toUpperCase() || null;
     if (parcelar.value && customParcelas.value.length >= 2) {
       const total = customParcelas.value.length;
       for (let i = 0; i < total; i++) {
@@ -297,9 +375,11 @@ async function submitExpense() {
           value: Number(Number(p.value).toFixed(2)),
           due_date: p.date,
           obs: form.value.obs || null,
-          vehicle_id: form.value.vehicle_id || null,
+          vehicle_id: vehicleId,
           supplier_id: supplierId,
           supplier_name_free: supplierFree,
+          driver_name_free: driverFree,
+          vehicle_plate_free: vehicleFree,
         });
         createdIds.push(created.id);
       }
@@ -314,9 +394,11 @@ async function submitExpense() {
         value: Number(form.value.value),
         due_date: form.value.due_date || form.value.date,
         obs: form.value.obs || null,
-        vehicle_id: form.value.vehicle_id || null,
+        vehicle_id: vehicleId,
         supplier_id: supplierId,
         supplier_name_free: supplierFree,
+        driver_name_free: driverFree,
+        vehicle_plate_free: vehicleFree,
       });
       createdIds.push(created.id);
       successMessage = `✅ Despesa salva para ${formDriverName.value}`;
@@ -357,17 +439,19 @@ function resetForm() {
     document: "",
     description: "",
     obs: "",
-    plate: "",
     vehicle_id: "",
     supplier_id: "",
     supplier_name_free: null,
   };
-  plateInput.value = "";
   supplierSearch.value = "";
   clearInvoice();
   parcelar.value = false;
   numParcelas.value = 2;
   customParcelas.value = [];
+  motoristaPesquisa.value = "";
+  vehiclePlateSearch.value = "";
+  noDriver.value = false;
+  noVehicle.value = false;
 }
 
 onMounted(() => {
@@ -409,38 +493,147 @@ onMounted(() => {
       <!-- Form -->
       <div class="px-7 py-6">
         <div class="grid grid-cols-2 gap-4">
-          <div>
+          <div class="relative">
             <label class="flabel">Motorista *</label>
-            <select v-model="form.driver_id" class="finput">
-              <option value="">Selecione o motorista...</option>
-              <option v-for="d in drivers" :key="d.id" :value="d.id">
-                {{ d.name }}
-              </option>
-              <option value="__outros__">— Outros</option>
-            </select>
+            <div class="relative">
+              <input
+                v-model="motoristaPesquisa"
+                type="text"
+                placeholder="Selecione, digite ou escolha 'Sem motorista'"
+                class="finput pr-8"
+                @focus="showMotoristaDropdown = true"
+                @blur="blurDriver"
+                @input="
+                  showMotoristaDropdown = true;
+                  form.driver_id = '';
+                  noDriver = false;
+                "
+              />
+              <button
+                v-if="form.driver_id || noDriver || motoristaPesquisa"
+                @click="clearDriver"
+                type="button"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                title="Limpar motorista"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+            <p
+              v-if="
+                motoristaPesquisa.trim().length >= 2 &&
+                !form.driver_id &&
+                !noDriver
+              "
+              class="mt-1 text-[10px] text-slate-400"
+            >
+              Sem cadastro: será salvo como "{{ motoristaPesquisa.trim() }}".
+            </p>
+            <!-- Dropdown de sugestões -->
+            <div
+              v-if="showMotoristaDropdown"
+              class="absolute z-50 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg max-h-[220px] overflow-y-auto"
+            >
+              <div
+                @mousedown.prevent="selectNoDriver"
+                class="px-4 py-2.5 cursor-pointer hover:bg-amber-50 transition-colors border-b border-stone-50 text-[13px] font-semibold text-amber-700"
+              >
+                — Sem motorista
+              </div>
+              <div
+                v-for="s in driverFiltered"
+                :key="s.id"
+                @mousedown.prevent="selectDriver(s)"
+                class="px-4 py-2.5 cursor-pointer hover:bg-blue-50 transition-colors border-b border-stone-50 last:border-0 flex flex-col"
+              >
+                <span class="text-[13px] font-semibold text-stone-800">{{
+                  s.name
+                }}</span>
+              </div>
+            </div>
           </div>
 
           <div class="relative">
             <label class="flabel"
-              >Placa
+              >Placa *
               <span class="font-normal normal-case text-slate-400"
                 >(auto do motorista, editável)</span
               ></label
             >
-            <input
-              v-model="plateInput"
-              type="text"
-              placeholder="Digite ou selecione a placa..."
-              class="finput"
-              list="plate-list"
-              @input="selectPlate(plateInput)"
-              @focus="$event.target.select()"
-            />
-            <datalist id="plate-list">
-              <option v-for="v in vehicles" :key="v.id" :value="v.plate">
-                {{ v.plate }} — {{ v.brand }} {{ v.model }}
-              </option>
-            </datalist>
+            <div class="relative">
+              <input
+                v-model="vehiclePlateSearch"
+                type="text"
+                placeholder="Selecione, digite ou escolha 'Sem placa'"
+                class="finput pr-8"
+                @focus="showVehicleDropdown = true"
+                @blur="blurVehiclePlate"
+                @input="
+                  showVehicleDropdown = true;
+                  form.vehicle_id = '';
+                  noVehicle = false;
+                "
+              />
+              <button
+                v-if="form.vehicle_id || noVehicle || vehiclePlateSearch"
+                @click="clearVehicle"
+                type="button"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                title="Limpar placa"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+            <p
+              v-if="
+                vehiclePlateSearch.trim().length >= 2 &&
+                !form.vehicle_id &&
+                !noVehicle
+              "
+              class="mt-1 text-[10px] text-slate-400"
+            >
+              Sem cadastro: será salva como "{{ vehiclePlateSearch.trim() }}".
+            </p>
+            <!-- Dropdown de sugestões -->
+            <div
+              v-if="showVehicleDropdown"
+              class="absolute z-50 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg max-h-[220px] overflow-y-auto"
+            >
+              <div
+                @mousedown.prevent="selectNoVehicle"
+                class="px-4 py-2.5 cursor-pointer hover:bg-amber-50 transition-colors border-b border-stone-50 text-[13px] font-semibold text-amber-700"
+              >
+                — Sem placa
+              </div>
+              <div
+                v-for="s in vehicleFiltered"
+                :key="s.id"
+                @mousedown.prevent="selectVehicle(s)"
+                class="px-4 py-2.5 cursor-pointer hover:bg-blue-50 transition-colors border-b border-stone-50 last:border-0 flex flex-col"
+              >
+                <span class="text-[13px] font-semibold text-stone-800"
+                  >{{ s.plate }} - {{ s.model }}</span
+                >
+              </div>
+            </div>
           </div>
 
           <div>
@@ -522,7 +715,7 @@ onMounted(() => {
           </div>
 
           <div>
-            <label class="flabel">Descrição</label>
+            <label class="flabel">Descrição *</label>
             <input
               v-model="form.description"
               placeholder="Ex: Troca de pneu dianteiro..."
@@ -848,7 +1041,7 @@ onMounted(() => {
 
         <!-- Resumo -->
         <div
-          v-if="form.driver_id && form.type && form.value"
+          v-if="driverValid && form.type && form.value"
           class="mt-4 bg-stone-50/50 border border-stone-100 rounded-xl px-4 py-3"
         >
           <div
@@ -861,9 +1054,11 @@ onMounted(() => {
               <span class="text-slate-400">Motorista:</span
               ><strong class="text-stone-600">{{ formDriverName }}</strong>
             </div>
-            <div v-if="form.plate" class="flex gap-1.5">
+            <div v-if="vehicleValid" class="flex gap-1.5">
               <span class="text-slate-400">Placa:</span
-              ><strong class="text-blue-700 font-mono">{{ form.plate }}</strong>
+              ><strong class="text-blue-700 font-mono">{{
+                vehiclePlateSearch.trim()
+              }}</strong>
             </div>
             <div class="flex gap-1.5">
               <span class="text-slate-400">Tipo:</span

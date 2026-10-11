@@ -69,12 +69,105 @@ describe('Payable Routes', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({
           document: 'NF 999',
+          description: 'Troca de óleo',
           category: 'manutencao',
           value: 1500.00,
           due_date: '2026-07-01',
         })
       expect(res.status).toBe(201)
       expect(res.body.id).toBe(99)
+    })
+
+    it('deve retornar 400 sem descrição ou com descrição só de espaços', async () => {
+      for (const description of [undefined, '', '   ']) {
+        const res = await request(app)
+          .post('/api/payable')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ category: 'manutencao', value: 100, due_date: '2026-07-01', description })
+        expect(res.status).toBe(400)
+      }
+      expect(query).not.toHaveBeenCalled()
+    })
+
+    it('grava motorista e placa livres quando não há cadastro', async () => {
+      query.mockResolvedValueOnce({ insertId: 100 })
+      const res = await request(app)
+        .post('/api/payable')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          description: 'Pneu',
+          category: 'pneus',
+          value: 800,
+          due_date: '2026-07-01',
+          trip_id: 5,
+          driver_name_free: 'ANTONIO',
+          vehicle_plate_free: 'ZZZ9999',
+        })
+      expect(res.status).toBe(201)
+      const params = query.mock.calls[0][1]
+      expect(params).toContain('ANTONIO')
+      expect(params).toContain('ZZZ9999')
+    })
+
+    it('descarta o texto livre quando vem o id cadastrado', async () => {
+      query.mockResolvedValueOnce({ insertId: 101 })
+      await request(app)
+        .post('/api/payable')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          description: 'Pneu',
+          category: 'pneus',
+          value: 800,
+          due_date: '2026-07-01',
+          trip_id: 5,
+          driver_id: 7,
+          driver_name_free: 'ANTONIO',
+          vehicle_id: 3,
+          vehicle_plate_free: 'ZZZ9999',
+        })
+      const params = query.mock.calls[0][1]
+      expect(params).not.toContain('ANTONIO')
+      expect(params).not.toContain('ZZZ9999')
+    })
+  })
+
+  describe('PUT /api/payable/:id', () => {
+    const base = { description: 'Troca de óleo', category: 'manutencao', value: 100, due_date: '2026-07-01', status: 'pendente' }
+
+    it('deve retornar 400 sem descrição e não tocar no banco', async () => {
+      const res = await request(app)
+        .put('/api/payable/10')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ ...base, description: '   ' })
+      expect(res.status).toBe(400)
+      expect(query).not.toHaveBeenCalled()
+    })
+
+    it('atualiza gravando motorista e placa livres', async () => {
+      query.mockResolvedValueOnce({ affectedRows: 1 })
+      const res = await request(app)
+        .put('/api/payable/10')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ ...base, driver_name_free: 'ANTONIO', vehicle_plate_free: 'ZZZ9999' })
+      expect(res.status).toBe(200)
+      expect(query.mock.calls[0][0]).toContain('driver_name_free=?')
+      expect(query.mock.calls[0][0]).toContain('vehicle_plate_free=?')
+      const params = query.mock.calls[0][1]
+      expect(params).toContain('ANTONIO')
+      expect(params).toContain('ZZZ9999')
+      expect(params[params.length - 1]).toBe('10')
+    })
+
+    it('"Sem motorista/Sem placa" grava null nos quatro campos', async () => {
+      query.mockResolvedValueOnce({ affectedRows: 1 })
+      const res = await request(app)
+        .put('/api/payable/10')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ ...base, driver_id: null, driver_name_free: null, vehicle_id: null, vehicle_plate_free: null })
+      expect(res.status).toBe(200)
+      const params = query.mock.calls[0][1]
+      // ordem do UPDATE: ..., driver_id, driver_name_free, vehicle_id, vehicle_plate_free, ...
+      expect(params.slice(4, 8)).toEqual([null, null, null, null])
     })
   })
 

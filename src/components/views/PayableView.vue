@@ -1,356 +1,640 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { usePayable } from '../../composables/usePayable'
-import { useDrivers } from '../../composables/useDrivers'
-import { useVehicles } from '../../composables/useVehicles'
-import { useSuppliers } from '../../composables/useSuppliers'
-import { useConfirm } from '../../composables/useConfirm'
-import KPICard from '../ui/KPICard.vue'
-import TableFooter from '../ui/TableFooter.vue'
-import { useTableState } from '../../composables/useTableState'
-import { printTable } from '../../utils/printTable'
-import { exportExcelGeneric, exportWordGeneric } from '../../utils/exportTable'
+import { ref, computed, onMounted, watch } from "vue";
+import { usePayable } from "../../composables/usePayable";
+import { useDrivers } from "../../composables/useDrivers";
+import { useVehicles } from "../../composables/useVehicles";
+import { useSuppliers } from "../../composables/useSuppliers";
+import { findVehicleByPlate } from "../../utils/findVehicleByPlate";
+import { useConfirm } from "../../composables/useConfirm";
+import KPICard from "../ui/KPICard.vue";
+import TableFooter from "../ui/TableFooter.vue";
+import { useTableState } from "../../composables/useTableState";
+import { printTable } from "../../utils/printTable";
+import { exportExcelGeneric, exportWordGeneric } from "../../utils/exportTable";
 
-const props = defineProps({ showToast: Function })
+const props = defineProps({ showToast: Function });
 
-const { items, summary, loading, fetchAll, fetchSummary, markPaid, update, remove, uploadReceipt, deleteReceipt, uploadInvoice, deleteInvoice } = usePayable()
-const { drivers, fetchAll: fetchDrivers } = useDrivers()
-const { vehicles, fetchAll: fetchVehicles } = useVehicles()
-const { suppliers, fetchAll: fetchSuppliers } = useSuppliers()
-const { confirmAction } = useConfirm()
+const {
+  items,
+  summary,
+  loading,
+  fetchAll,
+  fetchSummary,
+  markPaid,
+  update,
+  remove,
+  uploadReceipt,
+  deleteReceipt,
+  uploadInvoice,
+  deleteInvoice,
+} = usePayable();
+const { drivers, fetchAll: fetchDrivers } = useDrivers();
+const { vehicles, fetchAll: fetchVehicles } = useVehicles();
+const { suppliers, fetchAll: fetchSuppliers } = useSuppliers();
+const { confirmAction } = useConfirm();
+
+// ── Edit: busca de motorista
+const editDriverSearch = ref("");
+const editDriverOpen = ref(false);
+const editNoDriver = ref(false);
+const editDriverFiltered = computed(() => {
+  if (!editDriverSearch.value) return drivers.value.slice(0, 10);
+  const q = editDriverSearch.value.toLowerCase();
+  return drivers.value
+    .filter((d) => d.name.toLowerCase().includes(q))
+    .slice(0, 10);
+});
+const editDriverValid = computed(() =>
+  Boolean(
+    editForm.value.driver_id ||
+      editNoDriver.value ||
+      editDriverSearch.value.trim().length >= 2,
+  ),
+);
+function selectEditDriver(d) {
+  editDriverSearch.value = d.name;
+  editForm.value.driver_id = d.id;
+  editNoDriver.value = false;
+  editDriverOpen.value = false;
+}
+function selectEditNoDriver() {
+  editDriverSearch.value = "Sem motorista";
+  editForm.value.driver_id = null;
+  editNoDriver.value = true;
+  editDriverOpen.value = false;
+}
+function onEditDriverInput() {
+  editForm.value.driver_id = null;
+  editNoDriver.value = false;
+}
+function blurEditDriver() {
+  setTimeout(() => {
+    editDriverOpen.value = false;
+  }, 150);
+}
 
 // ── Edit: busca de placa
-const editPlateInput = ref('')
-const editPlateOpen = ref(false)
+const editPlateInput = ref("");
+const editPlateOpen = ref(false);
+const editNoVehicle = ref(false);
 const editPlateSuggestions = computed(() => {
-  if (!editPlateInput.value) return vehicles.value.slice(0, 10)
-  const q = editPlateInput.value.toLowerCase()
-  return vehicles.value.filter(v => v.plate.toLowerCase().includes(q)).slice(0, 10)
-})
+  if (!editPlateInput.value) return vehicles.value.slice(0, 10);
+  const q = editPlateInput.value.toLowerCase();
+  return vehicles.value
+    .filter((v) => v.plate.toLowerCase().includes(q))
+    .slice(0, 10);
+});
+const editVehicleValid = computed(() =>
+  Boolean(
+    editForm.value.vehicle_id ||
+      editNoVehicle.value ||
+      editPlateInput.value.trim().length >= 2,
+  ),
+);
 function selectEditPlate(plate) {
-  editPlateInput.value = plate
-  editForm.value.vehicle_id = vehicles.value.find(v => v.plate === plate)?.id || null
-  editPlateOpen.value = false
+  editPlateInput.value = plate;
+  editForm.value.vehicle_id =
+    vehicles.value.find((v) => v.plate === plate)?.id || null;
+  editNoVehicle.value = false;
+  editPlateOpen.value = false;
 }
-function blurEditPlate() { setTimeout(() => { editPlateOpen.value = false }, 150) }
+function selectEditNoVehicle() {
+  editPlateInput.value = "Sem placa";
+  editForm.value.vehicle_id = null;
+  editNoVehicle.value = true;
+  editPlateOpen.value = false;
+}
+function onEditPlateInput() {
+  editForm.value.vehicle_id = null;
+  editNoVehicle.value = false;
+}
+function blurEditPlate() {
+  setTimeout(() => {
+    editPlateOpen.value = false;
+  }, 150);
+}
 
 // ── Edit: busca de fornecedor
-const editSupplierSearch = ref('')
-const editSupplierOpen = ref(false)
+const editSupplierSearch = ref("");
+const editSupplierOpen = ref(false);
 const editSupplierFiltered = computed(() => {
-  if (!editSupplierSearch.value) return suppliers.value.slice(0, 10)
-  const q = editSupplierSearch.value.toLowerCase()
-  return suppliers.value.filter(s => s.name.toLowerCase().includes(q) || (s.cnpj && s.cnpj.includes(q))).slice(0, 10)
-})
+  if (!editSupplierSearch.value) return suppliers.value.slice(0, 10);
+  const q = editSupplierSearch.value.toLowerCase();
+  return suppliers.value
+    .filter(
+      (s) => s.name.toLowerCase().includes(q) || (s.cnpj && s.cnpj.includes(q)),
+    )
+    .slice(0, 10);
+});
 function selectEditSupplier(s) {
-  editSupplierSearch.value = s.name
-  editForm.value.supplier_id = s.id
-  editForm.value.supplier_name_free = null
-  editSupplierOpen.value = false
+  editSupplierSearch.value = s.name;
+  editForm.value.supplier_id = s.id;
+  editForm.value.supplier_name_free = null;
+  editSupplierOpen.value = false;
 }
 function clearEditSupplier() {
-  editSupplierSearch.value = ''
-  editForm.value.supplier_id = null
-  editForm.value.supplier_name_free = null
+  editSupplierSearch.value = "";
+  editForm.value.supplier_id = null;
+  editForm.value.supplier_name_free = null;
 }
 function blurEditSupplier() {
   setTimeout(() => {
-    editSupplierOpen.value = false
+    editSupplierOpen.value = false;
     // Se não selecionou da lista, salva o texto digitado como fornecedor livre
     if (!editForm.value.supplier_id) {
-      editForm.value.supplier_name_free = editSupplierSearch.value.trim() || null
+      editForm.value.supplier_name_free =
+        editSupplierSearch.value.trim() || null;
     }
-  }, 150)
+  }, 150);
 }
 
-
-const editingPayable = ref(null)
-const viewingPayable = ref(null)
-const editSaving = ref(false)
-const editError = ref('')
-const editForm = ref({ value: '', due_date: '', issue_date: '', document: '', description: '', category: '', obs: '', vehicle_id: null, supplier_id: null, supplier_name_free: null })
+const editingPayable = ref(null);
+const viewingPayable = ref(null);
+const editSaving = ref(false);
+const editError = ref("");
+const editForm = ref({
+  value: "",
+  due_date: "",
+  issue_date: "",
+  document: "",
+  description: "",
+  category: "",
+  obs: "",
+  driver_id: null,
+  vehicle_id: null,
+  supplier_id: null,
+  supplier_name_free: null,
+});
 
 // ── Upload de comprovante
-const receiptUploading = ref(null) // id da conta com upload em andamento
-const receiptInput = ref(null)
+const receiptUploading = ref(null); // id da conta com upload em andamento
+const receiptInput = ref(null);
 
 function triggerReceiptUpload(item) {
-  receiptTarget.value = item
-  receiptInput.value?.click()
+  receiptTarget.value = item;
+  receiptInput.value?.click();
 }
 
-const receiptTarget = ref(null)
+const receiptTarget = ref(null);
 async function handleReceiptFile(e) {
-  const file = e.target.files?.[0]
-  if (!file || !receiptTarget.value) return
+  const file = e.target.files?.[0];
+  if (!file || !receiptTarget.value) return;
 
-  receiptUploading.value = receiptTarget.value.id
+  receiptUploading.value = receiptTarget.value.id;
   try {
-    await uploadReceipt(receiptTarget.value.id, file)
-    props.showToast?.('✅ Comprovante enviado')
+    await uploadReceipt(receiptTarget.value.id, file);
+    props.showToast?.("✅ Comprovante enviado");
   } catch (err) {
-    props.showToast?.('❌ ' + (err.message || 'Erro ao enviar comprovante'))
+    props.showToast?.("❌ " + (err.message || "Erro ao enviar comprovante"));
   } finally {
-    receiptUploading.value = null
-    receiptTarget.value = null
+    receiptUploading.value = null;
+    receiptTarget.value = null;
     // limpa o input para permitir reenvio do mesmo arquivo
-    e.target.value = ''
+    e.target.value = "";
   }
 }
 
 async function handleDeleteReceipt(item) {
-  if (!await confirmAction({ title: 'Remover comprovante', message: 'Tem certeza que deseja remover o comprovante de pagamento?', confirmText: 'Remover' })) return
+  if (
+    !(await confirmAction({
+      title: "Remover comprovante",
+      message: "Tem certeza que deseja remover o comprovante de pagamento?",
+      confirmText: "Remover",
+    }))
+  )
+    return;
   try {
-    await deleteReceipt(item.id)
-    props.showToast?.('✅ Comprovante removido')
+    await deleteReceipt(item.id);
+    props.showToast?.("✅ Comprovante removido");
   } catch {
-    props.showToast?.('❌ Erro ao remover comprovante')
+    props.showToast?.("❌ Erro ao remover comprovante");
   }
 }
 
 function receiptUrl(item) {
-  if (!item?.receipt_url) return null
-  if (item.receipt_access_url) return item.receipt_access_url
-  const base = import.meta.env.VITE_API_URL || '/api'
+  if (!item?.receipt_url) return null;
+  if (item.receipt_access_url) return item.receipt_access_url;
+  const base = import.meta.env.VITE_API_URL || "/api";
   // receipt_url já vem como /uploads/receipts/...
-  return item.receipt_url.startsWith('http') ? item.receipt_url : base.replace('/api', '') + item.receipt_url
+  return item.receipt_url.startsWith("http")
+    ? item.receipt_url
+    : base.replace("/api", "") + item.receipt_url;
 }
 
 function isImage(url) {
-  return /\.(jpg|jpeg|png|webp)$/i.test(url || '')
+  return /\.(jpg|jpeg|png|webp)$/i.test(url || "");
 }
 
 // ── Upload de nota fiscal
-const invoiceUploading = ref(null)
-const invoiceInput = ref(null)
-const invoiceTarget = ref(null)
+const invoiceUploading = ref(null);
+const invoiceInput = ref(null);
+const invoiceTarget = ref(null);
 
 function triggerInvoiceUpload(item) {
-  invoiceTarget.value = item
-  invoiceInput.value?.click()
+  invoiceTarget.value = item;
+  invoiceInput.value?.click();
 }
 
 async function handleInvoiceFile(e) {
-  const file = e.target.files?.[0]
-  if (!file || !invoiceTarget.value) return
-  invoiceUploading.value = invoiceTarget.value.id
+  const file = e.target.files?.[0];
+  if (!file || !invoiceTarget.value) return;
+  invoiceUploading.value = invoiceTarget.value.id;
   try {
-    await uploadInvoice(invoiceTarget.value.id, file)
-    props.showToast?.('✅ Nota fiscal enviada')
+    await uploadInvoice(invoiceTarget.value.id, file);
+    props.showToast?.("✅ Nota fiscal enviada");
   } catch (err) {
-    props.showToast?.('❌ ' + (err.message || 'Erro ao enviar nota fiscal'))
+    props.showToast?.("❌ " + (err.message || "Erro ao enviar nota fiscal"));
   } finally {
-    invoiceUploading.value = null
-    invoiceTarget.value = null
-    e.target.value = ''
+    invoiceUploading.value = null;
+    invoiceTarget.value = null;
+    e.target.value = "";
   }
 }
 
 async function handleDeleteInvoice(item) {
-  if (!await confirmAction({ title: 'Remover nota fiscal', message: 'Tem certeza que deseja remover a nota fiscal anexada?', confirmText: 'Remover' })) return
+  if (
+    !(await confirmAction({
+      title: "Remover nota fiscal",
+      message: "Tem certeza que deseja remover a nota fiscal anexada?",
+      confirmText: "Remover",
+    }))
+  )
+    return;
   try {
-    await deleteInvoice(item.id)
-    props.showToast?.('✅ Nota fiscal removida')
+    await deleteInvoice(item.id);
+    props.showToast?.("✅ Nota fiscal removida");
   } catch {
-    props.showToast?.('❌ Erro ao remover nota fiscal')
+    props.showToast?.("❌ Erro ao remover nota fiscal");
   }
 }
 
 function invoiceUrl(item) {
-  if (!item?.invoice_url) return null
-  if (item.invoice_access_url) return item.invoice_access_url
-  const base = import.meta.env.VITE_API_URL || '/api'
-  return item.invoice_url.startsWith('http') ? item.invoice_url : base.replace('/api', '') + item.invoice_url
+  if (!item?.invoice_url) return null;
+  if (item.invoice_access_url) return item.invoice_access_url;
+  const base = import.meta.env.VITE_API_URL || "/api";
+  return item.invoice_url.startsWith("http")
+    ? item.invoice_url
+    : base.replace("/api", "") + item.invoice_url;
 }
 
 function openEditPayable(c) {
-  editingPayable.value = c
+  editingPayable.value = c;
   editForm.value = {
     value: c.value,
-    due_date: c.due_date?.split('T')[0] || '',
-    issue_date: c.issue_date?.split('T')[0] || '',
-    document: c.document || '',
-    description: c.description || '',
-    category: c.category || 'administrativo',
-    obs: c.obs || '',
+    due_date: c.due_date?.split("T")[0] || "",
+    issue_date: c.issue_date?.split("T")[0] || "",
+    document: c.document || "",
+    description: c.description || "",
+    category: c.category || "administrativo",
+    obs: c.obs || "",
+    driver_id: c.driver_id || null,
     vehicle_id: c.vehicle_id || null,
     supplier_id: c.supplier_id || null,
     supplier_name_free: c.supplier_name_free || null,
-  }
-  editPlateInput.value = c.vehicle_plate || ''
-  editSupplierSearch.value = c.supplier_name || c.supplier_name_free || ''
-  editError.value = ''
+  };
+  // Sem id e sem texto livre = o lançamento foi salvo como "Sem motorista/Sem placa"
+  editNoDriver.value = !c.driver_id && !c.driver_name_free;
+  editNoVehicle.value = !c.vehicle_id && !c.vehicle_plate_free;
+  editDriverSearch.value = c.driver_id
+    ? c.driver_name || ""
+    : c.driver_name_free || "Sem motorista";
+  editPlateInput.value = c.vehicle_id
+    ? c.vehicle_plate || ""
+    : c.vehicle_plate_free || "Sem placa";
+  editSupplierSearch.value = c.supplier_name || c.supplier_name_free || "";
+  editError.value = "";
 }
 
 async function saveEditPayable() {
-  if (!editForm.value.value || !editForm.value.due_date) { editError.value = 'Valor e vencimento obrigatórios'; return }
-  editSaving.value = true
-  editError.value = ''
+  if (!editForm.value.value || !editForm.value.due_date) {
+    editError.value = "Valor e vencimento obrigatórios";
+    return;
+  }
+  if (!editForm.value.description?.trim()) {
+    editError.value = "Descrição obrigatória";
+    return;
+  }
+  if (!editDriverValid.value) {
+    editError.value = "Informe o motorista ou escolha 'Sem motorista'";
+    return;
+  }
+  if (!editVehicleValid.value) {
+    editError.value = "Informe a placa ou escolha 'Sem placa'";
+    return;
+  }
+  editSaving.value = true;
+  editError.value = "";
   // Captura texto livre direto do campo caso o blur/timeout não tenha rodado ainda
-  const supplierFree = editForm.value.supplier_id ? null : (editSupplierSearch.value.trim() || null)
+  const supplierFree = editForm.value.supplier_id
+    ? null
+    : editSupplierSearch.value.trim() || null;
+  const driverFree =
+    editForm.value.driver_id || editNoDriver.value
+      ? null
+      : editDriverSearch.value.trim() || null;
+  const vehicleId =
+    editForm.value.vehicle_id ||
+    (editNoVehicle.value
+      ? null
+      : findVehicleByPlate(vehicles.value, editPlateInput.value)?.id) ||
+    null;
+  const vehicleFree =
+    vehicleId || editNoVehicle.value
+      ? null
+      : editPlateInput.value.trim().toUpperCase() || null;
   try {
     await update(editingPayable.value.id, {
       value: Number(editForm.value.value),
       due_date: editForm.value.due_date,
-      description: editForm.value.description || null,
+      description: editForm.value.description.trim(),
       category: editForm.value.category,
       obs: editForm.value.obs || null,
-      driver_id: editingPayable.value.driver_id || null,
-      vehicle_id: editForm.value.vehicle_id || null,
+      driver_id: editForm.value.driver_id || null,
+      driver_name_free: driverFree,
+      vehicle_id: vehicleId,
+      vehicle_plate_free: vehicleFree,
       supplier_id: editForm.value.supplier_id || null,
       supplier_name_free: supplierFree,
       document: editForm.value.document || null,
       issue_date: editForm.value.issue_date || null,
       status: editingPayable.value.status,
-    })
-    editingPayable.value = null
+    });
+    editingPayable.value = null;
   } catch (e) {
-    editError.value = e.message || 'Erro ao salvar'
+    editError.value = e.message || "Erro ao salvar";
   } finally {
-    editSaving.value = false
+    editSaving.value = false;
   }
 }
 
-const cpFilter = ref('all')
-const cpCatFilter = ref('all')
-const cpDateFrom = ref('')
-const cpDateTo = ref('')
-const cpIssueDateFrom = ref('')
-const cpIssueDateTo = ref('')
-const cpSort = ref('vencimento')
+const cpFilter = ref("all");
+const cpCatFilter = ref("all");
+const cpDateFrom = ref("");
+const cpDateTo = ref("");
+const cpIssueDateFrom = ref("");
+const cpIssueDateTo = ref("");
+const cpSort = ref("vencimento");
 
-const catLabel = { manutencao: 'Manutenção', pecas: 'Peças', pneus: 'Pneus (serv.)', administrativo: 'Administrativo', multas: 'Multas' }
-const catColor = { manutencao: '#f59e0b', pecas: '#2563eb', pneus: '#10b981', administrativo: '#7c3aed', multas: '#dc2626' }
-const catBg = { manutencao: '#fff7ed', pecas: '#eff6ff', pneus: '#f0fdf4', administrativo: '#f5f3ff', multas: '#fef2f2' }
-const catText = { manutencao: '#c2410c', pecas: '#1d4ed8', pneus: '#15803d', administrativo: '#6d28d9', multas: '#b91c1c' }
+const catLabel = {
+  manutencao: "Manutenção",
+  pecas: "Peças",
+  pneus: "Pneus (serv.)",
+  administrativo: "Administrativo",
+  multas: "Multas",
+};
+const catColor = {
+  manutencao: "#f59e0b",
+  pecas: "#2563eb",
+  pneus: "#10b981",
+  administrativo: "#7c3aed",
+  multas: "#dc2626",
+};
+const catBg = {
+  manutencao: "#fff7ed",
+  pecas: "#eff6ff",
+  pneus: "#f0fdf4",
+  administrativo: "#f5f3ff",
+  multas: "#fef2f2",
+};
+const catText = {
+  manutencao: "#c2410c",
+  pecas: "#1d4ed8",
+  pneus: "#15803d",
+  administrativo: "#6d28d9",
+  multas: "#b91c1c",
+};
 
 const filteredCP = computed(() => {
-  let list = [...items.value]
-  const dueDate = item => String(item.due_date || '').slice(0, 10)
-  const issueDate = item => String(item.issue_date || '').slice(0, 10)
-  if (cpFilter.value !== 'all') list = list.filter(c => c.status === cpFilter.value)
-  if (cpCatFilter.value !== 'all') list = list.filter(c => c.category === cpCatFilter.value)
-  if (cpDateFrom.value) list = list.filter(c => dueDate(c) >= cpDateFrom.value)
-  if (cpDateTo.value) list = list.filter(c => dueDate(c) <= cpDateTo.value)
-  if (cpIssueDateFrom.value) list = list.filter(c => issueDate(c) >= cpIssueDateFrom.value)
-  if (cpIssueDateTo.value) list = list.filter(c => issueDate(c) <= cpIssueDateTo.value)
-  if (cpSort.value === 'valor-desc') list.sort((a, b) => Number(b.value) - Number(a.value))
-  else if (cpSort.value === 'valor-asc') list.sort((a, b) => Number(a.value) - Number(b.value))
-  return list
-})
+  let list = [...items.value];
+  const dueDate = (item) => String(item.due_date || "").slice(0, 10);
+  const issueDate = (item) => String(item.issue_date || "").slice(0, 10);
+  if (cpFilter.value !== "all")
+    list = list.filter((c) => c.status === cpFilter.value);
+  if (cpCatFilter.value !== "all")
+    list = list.filter((c) => c.category === cpCatFilter.value);
+  if (cpDateFrom.value)
+    list = list.filter((c) => dueDate(c) >= cpDateFrom.value);
+  if (cpDateTo.value) list = list.filter((c) => dueDate(c) <= cpDateTo.value);
+  if (cpIssueDateFrom.value)
+    list = list.filter((c) => issueDate(c) >= cpIssueDateFrom.value);
+  if (cpIssueDateTo.value)
+    list = list.filter((c) => issueDate(c) <= cpIssueDateTo.value);
+  if (cpSort.value === "valor-desc")
+    list.sort((a, b) => Number(b.value) - Number(a.value));
+  else if (cpSort.value === "valor-asc")
+    list.sort((a, b) => Number(a.value) - Number(b.value));
+  return list;
+});
 
-const { search: cpSearch, page: cpPage, pageSize: cpPageSize, filtered: searchedCP, pages: cpPages, paged: pagedCP } = useTableState('payable', filteredCP, (list, q) => {
-  if (!q) return list
-  return list.filter(c => {
-    const value = Number(c.value || 0)
+const {
+  search: cpSearch,
+  page: cpPage,
+  pageSize: cpPageSize,
+  filtered: searchedCP,
+  pages: cpPages,
+  paged: pagedCP,
+} = useTableState("payable", filteredCP, (list, q) => {
+  if (!q) return list;
+  return list.filter((c) => {
+    const value = Number(c.value || 0);
     const valueVariants = [
-      value.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+      value.toLocaleString("pt-BR", { minimumFractionDigits: 2 }),
       value.toFixed(2),
       String(value),
-    ]
-    return [c.description, c.document, c.vehicle_plate, c.driver_name, c.supplier_name, ...valueVariants]
-      .some(field => String(field || '').toLocaleLowerCase('pt-BR').includes(q))
-  })
-})
+    ];
+    return [
+      c.description,
+      c.document,
+      c.vehicle_plate,
+      c.driver_name,
+      c.supplier_name,
+      ...valueVariants,
+    ].some((field) =>
+      String(field || "")
+        .toLocaleLowerCase("pt-BR")
+        .includes(q),
+    );
+  });
+});
 
 try {
-  const saved = JSON.parse(localStorage.getItem('cf_filters_payable') || '{}')
-  cpFilter.value = saved.status || 'all'; cpCatFilter.value = saved.category || 'all'; cpDateFrom.value = saved.dateFrom || ''; cpDateTo.value = saved.dateTo || ''; cpIssueDateFrom.value = saved.issueDateFrom || ''; cpIssueDateTo.value = saved.issueDateTo || ''
-} catch { /* preferência inválida: usa padrão */ }
-watch([cpFilter, cpCatFilter, cpDateFrom, cpDateTo, cpIssueDateFrom, cpIssueDateTo], () => localStorage.setItem('cf_filters_payable', JSON.stringify({ status: cpFilter.value, category: cpCatFilter.value, dateFrom: cpDateFrom.value, dateTo: cpDateTo.value, issueDateFrom: cpIssueDateFrom.value, issueDateTo: cpIssueDateTo.value })))
+  const saved = JSON.parse(localStorage.getItem("cf_filters_payable") || "{}");
+  cpFilter.value = saved.status || "all";
+  cpCatFilter.value = saved.category || "all";
+  cpDateFrom.value = saved.dateFrom || "";
+  cpDateTo.value = saved.dateTo || "";
+  cpIssueDateFrom.value = saved.issueDateFrom || "";
+  cpIssueDateTo.value = saved.issueDateTo || "";
+} catch {
+  /* preferência inválida: usa padrão */
+}
+watch(
+  [cpFilter, cpCatFilter, cpDateFrom, cpDateTo, cpIssueDateFrom, cpIssueDateTo],
+  () =>
+    localStorage.setItem(
+      "cf_filters_payable",
+      JSON.stringify({
+        status: cpFilter.value,
+        category: cpCatFilter.value,
+        dateFrom: cpDateFrom.value,
+        dateTo: cpDateTo.value,
+        issueDateFrom: cpIssueDateFrom.value,
+        issueDateTo: cpIssueDateTo.value,
+      }),
+    ),
+);
 
-const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+const fmt = (v) =>
+  Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
 
 function fmtDate(raw) {
-  if (!raw) return '—'
-  const d = new Date(raw)
-  if (isNaN(d)) return raw
-  return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+  if (!raw) return "—";
+  const d = new Date(raw);
+  if (isNaN(d)) return raw;
+  return d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
 }
 
 function dueBadge(raw, status) {
-  if (status === 'pago' || !raw) return null
-  const today = new Date(); today.setHours(0,0,0,0)
-  const due = new Date(raw); due.setHours(0,0,0,0)
-  const diff = Math.round((due - today) / 86400000)
-  if (diff < 0)  return { label: `${Math.abs(diff)}d vencido`, cls: 'bg-red-100 text-red-700' }
-  if (diff === 0) return { label: 'Vence hoje', cls: 'bg-red-100 text-red-700' }
-  if (diff <= 7)  return { label: `Vence em ${diff}d`, cls: 'bg-amber-100 text-amber-700' }
-  return null
+  if (status === "pago" || !raw) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(raw);
+  due.setHours(0, 0, 0, 0);
+  const diff = Math.round((due - today) / 86400000);
+  if (diff < 0)
+    return {
+      label: `${Math.abs(diff)}d vencido`,
+      cls: "bg-red-100 text-red-700",
+    };
+  if (diff === 0)
+    return { label: "Vence hoje", cls: "bg-red-100 text-red-700" };
+  if (diff <= 7)
+    return { label: `Vence em ${diff}d`, cls: "bg-amber-100 text-amber-700" };
+  return null;
 }
 
-const pendentes = computed(() => items.value.filter(c => c.status === 'pendente'))
-const pagos = computed(() => items.value.filter(c => c.status === 'pago'))
-const cpTotal = computed(() => items.value.reduce((s, c) => s + Number(c.value || 0), 0))
-const cpPendente = computed(() => pendentes.value.reduce((s, c) => s + Number(c.value || 0), 0))
-const cpPago = computed(() => pagos.value.reduce((s, c) => s + Number(c.value || 0), 0))
+const pendentes = computed(() =>
+  items.value.filter((c) => c.status === "pendente"),
+);
+const pagos = computed(() => items.value.filter((c) => c.status === "pago"));
+const cpTotal = computed(() =>
+  items.value.reduce((s, c) => s + Number(c.value || 0), 0),
+);
+const cpPendente = computed(() =>
+  pendentes.value.reduce((s, c) => s + Number(c.value || 0), 0),
+);
+const cpPago = computed(() =>
+  pagos.value.reduce((s, c) => s + Number(c.value || 0), 0),
+);
 const nextDue = computed(() => {
-  const d = [...pendentes.value].sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))[0]?.due_date
-  return d ? fmtDate(d) : '—'
-})
+  const d = [...pendentes.value].sort((a, b) =>
+    (a.due_date || "").localeCompare(b.due_date || ""),
+  )[0]?.due_date;
+  return d ? fmtDate(d) : "—";
+});
 
 async function handleMarkPaid(item) {
-  if (!await confirmAction({
-    title: 'Confirmar pagamento',
-    message: `Marcar a conta "${item.description || item.document || 'R$ ' + fmt(item.value)}" como paga hoje?`,
-    confirmText: 'Confirmar pagamento',
-    tone: 'primary',
-  })) return
-  const today = new Date().toISOString().split('T')[0]
-  await markPaid(item.id, today)
-  props.showToast?.(`✅ Conta paga: ${(item.description || item.document || '').substring(0, 40)}`)
+  if (
+    !(await confirmAction({
+      title: "Confirmar pagamento",
+      message: `Marcar a conta "${item.description || item.document || "R$ " + fmt(item.value)}" como paga hoje?`,
+      confirmText: "Confirmar pagamento",
+      tone: "primary",
+    }))
+  )
+    return;
+  const today = new Date().toISOString().split("T")[0];
+  await markPaid(item.id, today);
+  props.showToast?.(
+    `✅ Conta paga: ${(item.description || item.document || "").substring(0, 40)}`,
+  );
 }
 
 async function handleRemove(item) {
-  if (!await confirmAction({ title: 'Excluir conta a pagar', message: `Excluir a conta "${item.description || item.document || 'R$ ' + fmt(item.value)}"? Esta ação não pode ser desfeita.`, confirmText: 'Excluir' })) return
+  if (
+    !(await confirmAction({
+      title: "Excluir conta a pagar",
+      message: `Excluir a conta "${item.description || item.document || "R$ " + fmt(item.value)}"? Esta ação não pode ser desfeita.`,
+      confirmText: "Excluir",
+    }))
+  )
+    return;
   try {
-    await remove(item.id)
-    props.showToast?.('✅ Conta removida')
+    await remove(item.id);
+    props.showToast?.("✅ Conta removida");
   } catch {
-    props.showToast?.('❌ Erro ao remover conta')
+    props.showToast?.("❌ Erro ao remover conta");
   }
 }
 
 function buildExportData() {
-  const data = searchedCP.value
-  const statusLabel = { pendente: 'Pendente', pago: 'Pago', cancelado: 'Cancelado' }
-  const filters = []
-  if (cpFilter.value !== 'all') filters.push(`Status: ${statusLabel[cpFilter.value] || cpFilter.value}`)
-  if (cpCatFilter.value !== 'all') filters.push(`Categoria: ${catLabel[cpCatFilter.value] || cpCatFilter.value}`)
-  if (cpDateFrom.value) filters.push(`De: ${fmtDate(cpDateFrom.value)}`)
-  if (cpDateTo.value) filters.push(`Até: ${fmtDate(cpDateTo.value)}`)
-  if (cpSearch.value) filters.push(`Busca: "${cpSearch.value}"`)
+  const data = searchedCP.value;
+  const statusLabel = {
+    pendente: "Pendente",
+    pago: "Pago",
+    cancelado: "Cancelado",
+  };
+  const filters = [];
+  if (cpFilter.value !== "all")
+    filters.push(`Status: ${statusLabel[cpFilter.value] || cpFilter.value}`);
+  if (cpCatFilter.value !== "all")
+    filters.push(
+      `Categoria: ${catLabel[cpCatFilter.value] || cpCatFilter.value}`,
+    );
+  if (cpDateFrom.value) filters.push(`De: ${fmtDate(cpDateFrom.value)}`);
+  if (cpDateTo.value) filters.push(`Até: ${fmtDate(cpDateTo.value)}`);
+  if (cpSearch.value) filters.push(`Busca: "${cpSearch.value}"`);
   return {
-    title: 'Contas a Pagar',
-    subtitle: filters.length ? filters.join(' · ') : null,
-    headers: ['Emissão', 'Vencimento', 'Valor (R$)', 'Documento', 'Placa', 'Motorista', 'Fornecedor', 'Categoria', 'Status'],
-    rows: data.map(c => ({ type: 'row', data: [
-      fmtDate(c.issue_date),
-      fmtDate(c.due_date),
-      Number(c.value || 0),
-      c.description || c.document || '',
-      c.vehicle_plate || '',
-      c.driver_name || '',
-      c.supplier_name || '',
-      catLabel[c.category] || c.category || '',
-      statusLabel[c.status] || c.status || '',
-    ]})),
-    totalLabel: 'Total',
+    title: "Contas a Pagar",
+    subtitle: filters.length ? filters.join(" · ") : null,
+    headers: [
+      "Emissão",
+      "Vencimento",
+      "Valor (R$)",
+      "Documento",
+      "Placa",
+      "Motorista",
+      "Fornecedor",
+      "Categoria",
+      "Status",
+    ],
+    rows: data.map((c) => ({
+      type: "row",
+      data: [
+        fmtDate(c.issue_date),
+        fmtDate(c.due_date),
+        Number(c.value || 0),
+        c.description || c.document || "",
+        c.vehicle_plate || "",
+        c.driver_name || "",
+        c.supplier_name || "",
+        catLabel[c.category] || c.category || "",
+        statusLabel[c.status] || c.status || "",
+      ],
+    })),
+    totalLabel: "Total",
     totalValue: data.reduce((s, c) => s + Number(c.value || 0), 0),
     moneyCols: [2],
-  }
+  };
 }
-function handlePrint() { const d = buildExportData(); printTable({ ...d, totals: { label: d.totalLabel, value: d.totalValue } }) }
-function handleExcel() { exportExcelGeneric(buildExportData()) }
-function handleWord() { exportWordGeneric(buildExportData()) }
+function handlePrint() {
+  const d = buildExportData();
+  printTable({ ...d, totals: { label: d.totalLabel, value: d.totalValue } });
+}
+function handleExcel() {
+  exportExcelGeneric(buildExportData());
+}
+function handleWord() {
+  exportWordGeneric(buildExportData());
+}
 
 onMounted(() => {
-  fetchAll()
-  fetchSummary()
-  fetchDrivers()
-  fetchVehicles()
-  fetchSuppliers()
-})
+  fetchAll();
+  fetchSummary();
+  fetchDrivers();
+  fetchVehicles();
+  fetchSuppliers();
+});
 </script>
 
 <template>
@@ -373,80 +657,268 @@ onMounted(() => {
     />
 
     <!-- Loading -->
-    <div v-if="loading" class="flex items-center justify-center py-20 text-slate-400 text-sm">Carregando...</div>
+    <div
+      v-if="loading"
+      class="flex items-center justify-center py-20 text-slate-400 text-sm"
+    >
+      Carregando...
+    </div>
 
     <template v-else>
       <div class="grid grid-cols-4 gap-3.5 mb-5">
-        <KPICard title="Total a Pagar" :value="`R$ ${fmt(cpTotal)}`" subtitle="Total lançado" color="#ef4444" border-color="#ef4444" />
-        <KPICard title="Pendente" :value="`R$ ${fmt(cpPendente)}`" :subtitle="`${pendentes.length} contas em aberto`" color="#f59e0b" border-color="#f59e0b" />
-        <KPICard title="Pago" :value="`R$ ${fmt(cpPago)}`" :subtitle="`${pagos.length} contas liquidadas`" color="#10b981" border-color="#10b981" />
-        <KPICard title="Próximo Venc." :value="nextDue" subtitle="data mais próxima" color="#2563eb" border-color="#2563eb" />
+        <KPICard
+          title="Total a Pagar"
+          :value="`R$ ${fmt(cpTotal)}`"
+          subtitle="Total lançado"
+          color="#ef4444"
+          border-color="#ef4444"
+        />
+        <KPICard
+          title="Pendente"
+          :value="`R$ ${fmt(cpPendente)}`"
+          :subtitle="`${pendentes.length} contas em aberto`"
+          color="#f59e0b"
+          border-color="#f59e0b"
+        />
+        <KPICard
+          title="Pago"
+          :value="`R$ ${fmt(cpPago)}`"
+          :subtitle="`${pagos.length} contas liquidadas`"
+          color="#10b981"
+          border-color="#10b981"
+        />
+        <KPICard
+          title="Próximo Venc."
+          :value="nextDue"
+          subtitle="data mais próxima"
+          color="#2563eb"
+          border-color="#2563eb"
+        />
       </div>
 
       <!-- Filters -->
       <div class="glass rounded-[11px] py-3 px-[18px] mb-3.5 space-y-2.5">
         <div class="relative max-w-[440px]">
-          <svg class="absolute left-3 top-2.5 text-stone-400" width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M9.5 3a6.5 6.5 0 104.1 11.54L19.05 20 20.5 18.55l-5.46-5.45A6.5 6.5 0 009.5 3zm0 2a4.5 4.5 0 110 9 4.5 4.5 0 010-9z"/></svg>
-          <input v-model="cpSearch" class="finput !pl-9 !py-2" placeholder="Buscar por nota fiscal, valor, placa, motorista ou fornecedor..." />
+          <svg
+            class="absolute left-3 top-2.5 text-stone-400"
+            width="14"
+            height="14"
+            fill="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9.5 3a6.5 6.5 0 104.1 11.54L19.05 20 20.5 18.55l-5.46-5.45A6.5 6.5 0 009.5 3zm0 2a4.5 4.5 0 110 9 4.5 4.5 0 010-9z"
+            />
+          </svg>
+          <input
+            v-model="cpSearch"
+            class="finput !pl-9 !py-2"
+            placeholder="Buscar por nota fiscal, valor, placa, motorista ou fornecedor..."
+          />
         </div>
         <!-- linha 1: status + categoria -->
         <div class="flex gap-2 items-center flex-wrap">
           <span class="text-xs font-bold text-slate-500">STATUS:</span>
-          <button class="sbtn" :class="{ on: cpFilter === 'all' }" @click="cpFilter = 'all'">Todas</button>
-          <button class="sbtn" :class="{ on: cpFilter === 'pendente' }" @click="cpFilter = 'pendente'">Pendentes</button>
-          <button class="sbtn" :class="{ on: cpFilter === 'pago' }" @click="cpFilter = 'pago'">Pagas</button>
+          <button
+            class="sbtn"
+            :class="{ on: cpFilter === 'all' }"
+            @click="cpFilter = 'all'"
+          >
+            Todas
+          </button>
+          <button
+            class="sbtn"
+            :class="{ on: cpFilter === 'pendente' }"
+            @click="cpFilter = 'pendente'"
+          >
+            Pendentes
+          </button>
+          <button
+            class="sbtn"
+            :class="{ on: cpFilter === 'pago' }"
+            @click="cpFilter = 'pago'"
+          >
+            Pagas
+          </button>
           <div class="w-px h-5 bg-stone-200" />
           <span class="text-xs font-bold text-slate-500">CATEGORIA:</span>
-          <button class="sbtn" :class="{ on: cpCatFilter === 'all' }" @click="cpCatFilter = 'all'">Todas</button>
-          <button class="sbtn" :class="{ on: cpCatFilter === 'manutencao' }" @click="cpCatFilter = 'manutencao'">Manutenção</button>
-          <button class="sbtn" :class="{ on: cpCatFilter === 'pecas' }" @click="cpCatFilter = 'pecas'">Peças</button>
-          <button class="sbtn" :class="{ on: cpCatFilter === 'pneus' }" @click="cpCatFilter = 'pneus'">Pneus</button>
-          <button class="sbtn" :class="{ on: cpCatFilter === 'administrativo' }" @click="cpCatFilter = 'administrativo'">Administrativo</button>
-          <button class="sbtn" :class="{ on: cpCatFilter === 'multas' }" @click="cpCatFilter = 'multas'">Multas</button>
+          <button
+            class="sbtn"
+            :class="{ on: cpCatFilter === 'all' }"
+            @click="cpCatFilter = 'all'"
+          >
+            Todas
+          </button>
+          <button
+            class="sbtn"
+            :class="{ on: cpCatFilter === 'manutencao' }"
+            @click="cpCatFilter = 'manutencao'"
+          >
+            Manutenção
+          </button>
+          <button
+            class="sbtn"
+            :class="{ on: cpCatFilter === 'pecas' }"
+            @click="cpCatFilter = 'pecas'"
+          >
+            Peças
+          </button>
+          <button
+            class="sbtn"
+            :class="{ on: cpCatFilter === 'pneus' }"
+            @click="cpCatFilter = 'pneus'"
+          >
+            Pneus
+          </button>
+          <button
+            class="sbtn"
+            :class="{ on: cpCatFilter === 'administrativo' }"
+            @click="cpCatFilter = 'administrativo'"
+          >
+            Administrativo
+          </button>
+          <button
+            class="sbtn"
+            :class="{ on: cpCatFilter === 'multas' }"
+            @click="cpCatFilter = 'multas'"
+          >
+            Multas
+          </button>
         </div>
         <!-- linha 2: período + ordenação -->
         <div class="flex gap-2 items-center flex-wrap">
           <span class="text-xs font-bold text-slate-500">VENCIMENTO:</span>
-          <label class="flex items-center gap-1 text-xs text-slate-500">De
-            <input v-model="cpDateFrom" type="date" aria-label="Vencimento de" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
+          <label class="flex items-center gap-1 text-xs text-slate-500"
+            >De
+            <input
+              v-model="cpDateFrom"
+              type="date"
+              aria-label="Vencimento de"
+              class="text-xs border border-stone-200 rounded-md px-2 py-1.5"
+            />
           </label>
           <span class="text-xs text-slate-400">até</span>
           <label class="sr-only" for="payable-due-to">Vencimento até</label>
-          <input id="payable-due-to" v-model="cpDateTo" type="date" aria-label="Vencimento até" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
+          <input
+            id="payable-due-to"
+            v-model="cpDateTo"
+            type="date"
+            aria-label="Vencimento até"
+            class="text-xs border border-stone-200 rounded-md px-2 py-1.5"
+          />
           <button
             v-if="cpDateFrom || cpDateTo"
-            @click="cpDateFrom = ''; cpDateTo = ''"
+            @click="
+              cpDateFrom = '';
+              cpDateTo = '';
+            "
             class="text-xs text-slate-400 hover:text-stone-600 underline"
-          >limpar</button>
+          >
+            limpar
+          </button>
           <div class="w-px h-5 bg-stone-200" />
           <span class="text-xs font-bold text-slate-500">EMISSÃO:</span>
-          <label class="flex items-center gap-1 text-xs text-slate-500">De
-            <input v-model="cpIssueDateFrom" type="date" aria-label="Emissão de" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
+          <label class="flex items-center gap-1 text-xs text-slate-500"
+            >De
+            <input
+              v-model="cpIssueDateFrom"
+              type="date"
+              aria-label="Emissão de"
+              class="text-xs border border-stone-200 rounded-md px-2 py-1.5"
+            />
           </label>
           <span class="text-xs text-slate-400">até</span>
           <label class="sr-only" for="payable-issue-to">Emissão até</label>
-          <input id="payable-issue-to" v-model="cpIssueDateTo" type="date" aria-label="Emissão até" class="text-xs border border-stone-200 rounded-md px-2 py-1.5" />
+          <input
+            id="payable-issue-to"
+            v-model="cpIssueDateTo"
+            type="date"
+            aria-label="Emissão até"
+            class="text-xs border border-stone-200 rounded-md px-2 py-1.5"
+          />
           <button
             v-if="cpIssueDateFrom || cpIssueDateTo"
-            @click="cpIssueDateFrom = ''; cpIssueDateTo = ''"
+            @click="
+              cpIssueDateFrom = '';
+              cpIssueDateTo = '';
+            "
             class="text-xs text-slate-400 hover:text-stone-600 underline"
-          >limpar</button>
+          >
+            limpar
+          </button>
           <div class="ml-auto flex gap-2 items-center">
             <span class="text-xs font-bold text-slate-500">ORDENAR:</span>
-            <button class="sbtn" :class="{ on: cpSort === 'vencimento' }" @click="cpSort = 'vencimento'">Vencimento</button>
-            <button class="sbtn" :class="{ on: cpSort === 'valor-desc' }" @click="cpSort = 'valor-desc'">↓ Valor</button>
-            <button class="sbtn" :class="{ on: cpSort === 'valor-asc' }" @click="cpSort = 'valor-asc'">↑ Valor</button>
+            <button
+              class="sbtn"
+              :class="{ on: cpSort === 'vencimento' }"
+              @click="cpSort = 'vencimento'"
+            >
+              Vencimento
+            </button>
+            <button
+              class="sbtn"
+              :class="{ on: cpSort === 'valor-desc' }"
+              @click="cpSort = 'valor-desc'"
+            >
+              ↓ Valor
+            </button>
+            <button
+              class="sbtn"
+              :class="{ on: cpSort === 'valor-asc' }"
+              @click="cpSort = 'valor-asc'"
+            >
+              ↑ Valor
+            </button>
             <div class="w-px h-5 bg-stone-200" />
-            <button @click="handlePrint" class="sbtn flex items-center gap-1" title="Imprimir / PDF">
-              <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+            <button
+              @click="handlePrint"
+              class="sbtn flex items-center gap-1"
+              title="Imprimir / PDF"
+            >
+              <svg
+                width="13"
+                height="13"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"
+                />
+              </svg>
               PDF
             </button>
-            <button @click="handleExcel" class="sbtn flex items-center gap-1" title="Exportar Excel">
-              <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm2-6h2.5l1.5-2.5L13.5 14H16l-3-4 3-4h-2.5L12 8.5 10.5 6H8l3 4-3 4z"/></svg>
+            <button
+              @click="handleExcel"
+              class="sbtn flex items-center gap-1"
+              title="Exportar Excel"
+            >
+              <svg
+                width="13"
+                height="13"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm2-6h2.5l1.5-2.5L13.5 14H16l-3-4 3-4h-2.5L12 8.5 10.5 6H8l3 4-3 4z"
+                />
+              </svg>
               Excel
             </button>
-            <button @click="handleWord" class="sbtn flex items-center gap-1" title="Exportar Word">
-              <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm1-3h2l1.5-5L12 17h2l2.5-8h-2l-1.5 5-1.5-5h-2l-1.5 5-1.5-5H5l2.5 8z"/></svg>
+            <button
+              @click="handleWord"
+              class="sbtn flex items-center gap-1"
+              title="Exportar Word"
+            >
+              <svg
+                width="13"
+                height="13"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm1-3h2l1.5-5L12 17h2l2.5-8h-2l-1.5 5-1.5-5h-2l-1.5 5-1.5-5H5l2.5 8z"
+                />
+              </svg>
               Word
             </button>
           </div>
@@ -467,36 +939,60 @@ onMounted(() => {
               <th class="th">Fornecedor</th>
               <th class="th">Categoria</th>
               <th class="th">Status</th>
-              <th class="th" style="text-align:center">Ação</th>
+              <th class="th" style="text-align: center">Ação</th>
             </tr>
           </thead>
           <tbody>
             <tr class="trow" v-for="c in pagedCP" :key="c.id">
-              <td class="td whitespace-nowrap text-xs text-stone-600">{{ fmtDate(c.issue_date) }}</td>
+              <td class="td whitespace-nowrap text-xs text-stone-600">
+                {{ fmtDate(c.issue_date) }}
+              </td>
               <td class="td whitespace-nowrap">
-                <div class="font-semibold text-stone-800">{{ fmtDate(c.due_date) }}</div>
-                <span v-if="dueBadge(c.due_date, c.status)" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full" :class="dueBadge(c.due_date, c.status).cls">
+                <div class="font-semibold text-stone-800">
+                  {{ fmtDate(c.due_date) }}
+                </div>
+                <span
+                  v-if="dueBadge(c.due_date, c.status)"
+                  class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                  :class="dueBadge(c.due_date, c.status).cls"
+                >
                   {{ dueBadge(c.due_date, c.status).label }}
                 </span>
               </td>
-              <td class="td font-extrabold text-stone-800 whitespace-nowrap">R$ {{ fmt(c.value) }}</td>
+              <td class="td font-extrabold text-stone-800 whitespace-nowrap">
+                R$ {{ fmt(c.value) }}
+              </td>
               <td class="td text-xs max-w-[220px]">
-                <div class="truncate">{{ c.description || '—' }}</div>
-                <div v-if="c.document" class="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
+                <div class="truncate">{{ c.description || "—" }}</div>
+                <div
+                  v-if="c.document"
+                  class="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded"
+                >
                   NF {{ c.document }}
                 </div>
               </td>
               <td class="td">
-                <span v-if="c.vehicle_plate" class="font-mono text-xs font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded">{{ c.vehicle_plate }}</span>
+                <span
+                  v-if="c.vehicle_plate"
+                  class="font-mono text-xs font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded"
+                  >{{ c.vehicle_plate }}</span
+                >
                 <span v-else class="text-slate-400 text-xs">—</span>
               </td>
-              <td class="td font-semibold text-stone-800 text-xs">{{ c.driver_name || '—' }}</td>
-              <td class="td text-xs text-slate-500">{{ c.supplier_name || '—' }}</td>
+              <td class="td font-semibold text-stone-800 text-xs">
+                {{ c.driver_name || "—" }}
+              </td>
+              <td class="td text-xs text-slate-500">
+                {{ c.supplier_name || "—" }}
+              </td>
               <td class="td">
                 <span
                   v-if="c.category"
                   class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold"
-                  :style="{ background: catBg[c.category] || '#f1f5f9', color: catText[c.category] || '#475569' }"
+                  :style="{
+                    background: catBg[c.category] || '#f1f5f9',
+                    color: catText[c.category] || '#475569',
+                  }"
                 >
                   {{ catLabel[c.category] || c.category }}
                 </span>
@@ -505,9 +1001,13 @@ onMounted(() => {
               <td class="td">
                 <span
                   class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold"
-                  :class="c.status === 'pago' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'"
+                  :class="
+                    c.status === 'pago'
+                      ? 'bg-green-100 text-green-600'
+                      : 'bg-amber-100 text-amber-600'
+                  "
                 >
-                  {{ c.status === 'pago' ? '✓ Pago' : '● Pendente' }}
+                  {{ c.status === "pago" ? "✓ Pago" : "● Pendente" }}
                 </span>
               </td>
               <td class="td text-center">
@@ -517,38 +1017,106 @@ onMounted(() => {
                     title="Visualizar"
                     class="text-stone-600 bg-stone-100/70 hover:bg-stone-100 p-1.5 rounded-md transition-colors inline-flex"
                   >
-                    <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                    <svg
+                      width="13"
+                      height="13"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"
+                      />
+                    </svg>
                   </button>
                   <button
                     @click="openEditPayable(c)"
                     title="Editar"
                     class="text-blue-600 bg-blue-50 hover:bg-blue-100 p-1.5 rounded-md transition-colors inline-flex"
                   >
-                    <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                    <svg
+                      width="13"
+                      height="13"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                      />
+                    </svg>
                   </button>
                   <!-- Upload comprovante -->
                   <button
                     @click="triggerReceiptUpload(c)"
                     title="Comprovante de pagamento"
                     class="p-1.5 rounded-md transition-colors inline-flex"
-                    :class="c.receipt_url ? 'text-green-600 bg-green-50 hover:bg-green-100' : 'text-amber-500 bg-amber-50 hover:bg-amber-100'"
+                    :class="
+                      c.receipt_url
+                        ? 'text-green-600 bg-green-50 hover:bg-green-100'
+                        : 'text-amber-500 bg-amber-50 hover:bg-amber-100'
+                    "
                     :disabled="receiptUploading === c.id"
                   >
-                    <svg v-if="receiptUploading === c.id" class="animate-spin" width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4V2A10 10 0 002 12h2a8 8 0 018-8z"/></svg>
-                    <svg v-else width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M21.586 10.461l-7.047-7.047a2 2 0 00-2.828 0L4 11.125V20h8.875l7.711-7.711a2 2 0 000-2.828zm-8.875 7.539H6v-6.703L12.703 4l6.703 6.703L12.711 18zM10 18l-1-4 4 1-3 3z"/></svg>
+                    <svg
+                      v-if="receiptUploading === c.id"
+                      class="animate-spin"
+                      width="13"
+                      height="13"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M12 4V2A10 10 0 002 12h2a8 8 0 018-8z" />
+                    </svg>
+                    <svg
+                      v-else
+                      width="13"
+                      height="13"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        d="M21.586 10.461l-7.047-7.047a2 2 0 00-2.828 0L4 11.125V20h8.875l7.711-7.711a2 2 0 000-2.828zm-8.875 7.539H6v-6.703L12.703 4l6.703 6.703L12.711 18zM10 18l-1-4 4 1-3 3z"
+                      />
+                    </svg>
                   </button>
                   <!-- Upload nota fiscal -->
                   <button
                     @click="triggerInvoiceUpload(c)"
                     title="Nota Fiscal"
                     class="p-1.5 rounded-md transition-colors inline-flex"
-                    :class="c.invoice_url ? 'text-purple-600 bg-purple-50 hover:bg-purple-100' : 'text-stone-400 bg-stone-50 hover:bg-stone-100'"
+                    :class="
+                      c.invoice_url
+                        ? 'text-purple-600 bg-purple-50 hover:bg-purple-100'
+                        : 'text-stone-400 bg-stone-50 hover:bg-stone-100'
+                    "
                     :disabled="invoiceUploading === c.id"
                   >
-                    <svg v-if="invoiceUploading === c.id" class="animate-spin" width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4V2A10 10 0 002 12h2a8 8 0 018-8z"/></svg>
-                    <svg v-else width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                    <svg
+                      v-if="invoiceUploading === c.id"
+                      class="animate-spin"
+                      width="13"
+                      height="13"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M12 4V2A10 10 0 002 12h2a8 8 0 018-8z" />
+                    </svg>
+                    <svg
+                      v-else
+                      width="13"
+                      height="13"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"
+                      />
+                    </svg>
                   </button>
-                  <button v-if="c.status === 'pendente'" @click="handleMarkPaid(c)" class="btn-p !py-1.5 !px-3 text-xs">
+                  <button
+                    v-if="c.status === 'pendente'"
+                    @click="handleMarkPaid(c)"
+                    class="btn-p !py-1.5 !px-3 text-xs"
+                  >
                     Pagar
                   </button>
                   <button
@@ -556,55 +1124,141 @@ onMounted(() => {
                     title="Excluir"
                     class="text-red-400 bg-red-50 hover:bg-red-100 p-1.5 rounded-md transition-colors inline-flex"
                   >
-                    <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    <svg
+                      width="13"
+                      height="13"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                      />
+                    </svg>
                   </button>
                 </div>
               </td>
             </tr>
           </tbody>
         </table>
-        <div v-if="!searchedCP.length" class="text-center py-12"><div class="text-2xl mb-2">⌕</div><strong class="block text-sm text-stone-600">Nenhuma conta encontrada</strong><span class="text-xs text-stone-400">Tente limpar a busca ou alterar os filtros.</span></div>
-        <TableFooter v-else :page="cpPage" :pages="cpPages" :total="searchedCP.length" :page-size="cpPageSize" @update:page="cpPage = $event" @update:page-size="cpPageSize = $event" />
+        <div v-if="!searchedCP.length" class="text-center py-12">
+          <div class="text-2xl mb-2">⌕</div>
+          <strong class="block text-sm text-stone-600"
+            >Nenhuma conta encontrada</strong
+          ><span class="text-xs text-stone-400"
+            >Tente limpar a busca ou alterar os filtros.</span
+          >
+        </div>
+        <TableFooter
+          v-else
+          :page="cpPage"
+          :pages="cpPages"
+          :total="searchedCP.length"
+          :page-size="cpPageSize"
+          @update:page="cpPage = $event"
+          @update:page-size="cpPageSize = $event"
+        />
       </div>
     </template>
 
     <!-- Modal Editar Conta -->
     <Teleport to="body">
-      <div v-if="editingPayable" class="fixed inset-0 z-[80] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/40" @click="editingPayable = null" />
-        <div class="relative glass-strong rounded-2xl w-full max-w-md z-10">
-          <div class="flex items-center justify-between p-5 border-b border-stone-100">
-            <h3 class="text-base font-bold text-stone-800 m-0">Editar Conta a Pagar</h3>
-            <button @click="editingPayable = null" class="text-slate-400 hover:text-stone-600">
-              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      <div
+        v-if="editingPayable"
+        class="fixed inset-0 z-[80] flex items-center justify-center p-4"
+      >
+        <div
+          class="absolute inset-0 bg-black/40"
+          @click="editingPayable = null"
+        />
+        <div
+          class="relative glass-strong rounded-2xl w-full max-w-md z-10 max-h-[92vh] overflow-y-auto"
+        >
+          <div
+            class="flex items-center justify-between p-5 border-b border-stone-100"
+          >
+            <h3 class="text-base font-bold text-stone-800 m-0">
+              Editar Conta a Pagar
+            </h3>
+            <button
+              @click="editingPayable = null"
+              class="text-slate-400 hover:text-stone-600"
+            >
+              <svg
+                width="20"
+                height="20"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                />
+              </svg>
             </button>
           </div>
           <div class="p-5 space-y-4">
             <div class="grid grid-cols-3 gap-3">
               <div>
-                <label class="block text-xs font-bold text-stone-600 mb-1.5">Valor (R$) *</label>
-                <input v-model="editForm.value" type="number" step="0.01" min="0" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <label class="block text-xs font-bold text-stone-600 mb-1.5"
+                  >Valor (R$) *</label
+                >
+                <input
+                  v-model="editForm.value"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
               <div>
-                <label class="block text-xs font-bold text-stone-600 mb-1.5">Emissão</label>
-                <input v-model="editForm.issue_date" type="date" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <label class="block text-xs font-bold text-stone-600 mb-1.5"
+                  >Emissão</label
+                >
+                <input
+                  v-model="editForm.issue_date"
+                  type="date"
+                  class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
               <div>
-                <label class="block text-xs font-bold text-stone-600 mb-1.5">Vencimento *</label>
-                <input v-model="editForm.due_date" type="date" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <label class="block text-xs font-bold text-stone-600 mb-1.5"
+                  >Vencimento *</label
+                >
+                <input
+                  v-model="editForm.due_date"
+                  type="date"
+                  class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
             </div>
             <div>
-              <label class="block text-xs font-bold text-stone-600 mb-1.5">Nota Fiscal (nº)</label>
-              <input v-model="editForm.document" type="text" placeholder="Ex: 148.587" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <label class="block text-xs font-bold text-stone-600 mb-1.5"
+                >Nota Fiscal (nº)</label
+              >
+              <input
+                v-model="editForm.document"
+                type="text"
+                placeholder="Ex: 148.587"
+                class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
             <div>
-              <label class="block text-xs font-bold text-stone-600 mb-1.5">Descrição</label>
-              <input v-model="editForm.description" type="text" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <label class="block text-xs font-bold text-stone-600 mb-1.5"
+                >Descrição *</label
+              >
+              <input
+                v-model="editForm.description"
+                type="text"
+                class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
             <div>
-              <label class="block text-xs font-bold text-stone-600 mb-1.5">Categoria</label>
-              <select v-model="editForm.category" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <label class="block text-xs font-bold text-stone-600 mb-1.5"
+                >Categoria</label
+              >
+              <select
+                v-model="editForm.category"
+                class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
                 <option value="manutencao">Manutenção</option>
                 <option value="pecas">Peças</option>
                 <option value="pneus">Pneus (serv.)</option>
@@ -612,23 +1266,105 @@ onMounted(() => {
                 <option value="multas">Multas</option>
               </select>
             </div>
+            <!-- Motorista -->
+            <div class="relative">
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">
+                Motorista *
+                <span
+                  v-if="editForm.driver_id"
+                  class="ml-1.5 text-[10px] font-semibold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full"
+                  >cadastrado</span
+                >
+                <span
+                  v-else-if="editNoDriver"
+                  class="ml-1.5 text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full"
+                  >sem motorista</span
+                >
+                <span
+                  v-else-if="editDriverSearch.trim()"
+                  class="ml-1.5 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full"
+                  >livre</span
+                >
+              </label>
+              <input
+                v-model="editDriverSearch"
+                type="text"
+                placeholder="Selecione, digite ou escolha 'Sem motorista'"
+                class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                @focus="editDriverOpen = true"
+                @blur="blurEditDriver"
+                @input="onEditDriverInput"
+              />
+              <ul
+                v-if="editDriverOpen"
+                class="absolute z-50 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-40 overflow-y-auto text-sm"
+              >
+                <li
+                  class="px-3 py-2 cursor-pointer hover:bg-amber-50 font-semibold text-amber-700"
+                  @mousedown.prevent="selectEditNoDriver"
+                >
+                  — Sem motorista
+                </li>
+                <li
+                  v-for="d in editDriverFiltered"
+                  :key="d.id"
+                  class="px-3 py-2 cursor-pointer hover:bg-blue-50 text-slate-700"
+                  @mousedown.prevent="selectEditDriver(d)"
+                >
+                  {{ d.name }}
+                </li>
+              </ul>
+            </div>
+
             <!-- Placa -->
             <div class="relative">
-              <label class="block text-xs font-bold text-stone-600 mb-1.5">Placa</label>
+              <label class="block text-xs font-bold text-stone-600 mb-1.5">
+                Placa *
+                <span
+                  v-if="editForm.vehicle_id"
+                  class="ml-1.5 text-[10px] font-semibold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full"
+                  >cadastrada</span
+                >
+                <span
+                  v-else-if="editNoVehicle"
+                  class="ml-1.5 text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full"
+                  >sem placa</span
+                >
+                <span
+                  v-else-if="editPlateInput.trim()"
+                  class="ml-1.5 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full"
+                  >livre</span
+                >
+              </label>
               <input
                 v-model="editPlateInput"
                 type="text"
-                placeholder="Ex: ABC1D23"
-                class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
+                placeholder="Selecione, digite ou escolha 'Sem placa'"
+                class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 @focus="editPlateOpen = true"
                 @blur="blurEditPlate"
-                @input="editForm.vehicle_id = null"
+                @input="onEditPlateInput"
               />
-              <ul v-if="editPlateOpen && editPlateSuggestions.length" class="absolute z-50 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-40 overflow-y-auto text-sm">
-                <li v-for="v in editPlateSuggestions" :key="v.id"
+              <ul
+                v-if="editPlateOpen"
+                class="absolute z-50 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-40 overflow-y-auto text-sm"
+              >
+                <li
+                  class="px-3 py-2 cursor-pointer hover:bg-amber-50 font-semibold text-amber-700"
+                  @mousedown.prevent="selectEditNoVehicle"
+                >
+                  — Sem placa
+                </li>
+                <li
+                  v-for="v in editPlateSuggestions"
+                  :key="v.id"
                   class="px-3 py-2 cursor-pointer hover:bg-blue-50 font-mono font-bold text-slate-700"
-                  @mousedown.prevent="selectEditPlate(v.plate)">
-                  {{ v.plate }} <span class="font-normal text-slate-400 ml-2">{{ v.brand }} {{ v.model }}</span>
+                  @mousedown.prevent="selectEditPlate(v.plate)"
+                >
+                  {{ v.plate }}
+                  <span class="font-normal text-slate-400 ml-2"
+                    >{{ v.brand }} {{ v.model }}</span
+                  >
                 </li>
               </ul>
             </div>
@@ -637,8 +1373,16 @@ onMounted(() => {
             <div class="relative">
               <label class="block text-xs font-bold text-stone-600 mb-1.5">
                 Fornecedor
-                <span v-if="editForm.supplier_id" class="ml-1.5 text-[10px] font-semibold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">cadastrado</span>
-                <span v-else-if="editSupplierSearch" class="ml-1.5 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">livre</span>
+                <span
+                  v-if="editForm.supplier_id"
+                  class="ml-1.5 text-[10px] font-semibold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full"
+                  >cadastrado</span
+                >
+                <span
+                  v-else-if="editSupplierSearch"
+                  class="ml-1.5 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full"
+                  >livre</span
+                >
               </label>
               <div class="relative">
                 <input
@@ -646,35 +1390,76 @@ onMounted(() => {
                   type="text"
                   placeholder="Nome do fornecedor (cadastrado ou livre)"
                   class="w-full border rounded-lg px-3 py-2.5 pr-8 text-sm focus:outline-none focus:ring-2"
-                  :class="editForm.supplier_id ? 'border-green-300 focus:ring-green-400' : 'border-stone-200 focus:ring-blue-500'"
+                  :class="
+                    editForm.supplier_id
+                      ? 'border-green-300 focus:ring-green-400'
+                      : 'border-stone-200 focus:ring-blue-500'
+                  "
                   @focus="editSupplierOpen = true"
                   @blur="blurEditSupplier"
-                  @input="editForm.supplier_id = null; editForm.supplier_name_free = null"
+                  @input="
+                    editForm.supplier_id = null;
+                    editForm.supplier_name_free = null;
+                  "
                 />
-                <button v-if="editSupplierSearch" @mousedown.prevent="clearEditSupplier" type="button"
-                  class="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
-                  <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                <button
+                  v-if="editSupplierSearch"
+                  @mousedown.prevent="clearEditSupplier"
+                  type="button"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                    />
+                  </svg>
                 </button>
               </div>
-              <ul v-if="editSupplierOpen && editSupplierFiltered.length" class="absolute z-50 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-40 overflow-y-auto text-sm">
-                <li v-for="s in editSupplierFiltered" :key="s.id"
+              <ul
+                v-if="editSupplierOpen && editSupplierFiltered.length"
+                class="absolute z-50 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-40 overflow-y-auto text-sm"
+              >
+                <li
+                  v-for="s in editSupplierFiltered"
+                  :key="s.id"
                   class="px-3 py-2 cursor-pointer hover:bg-blue-50 text-slate-700"
-                  @mousedown.prevent="selectEditSupplier(s)">
+                  @mousedown.prevent="selectEditSupplier(s)"
+                >
                   {{ s.name }}
                 </li>
               </ul>
             </div>
 
             <div>
-              <label class="block text-xs font-bold text-stone-600 mb-1.5">Observação</label>
-              <textarea v-model="editForm.obs" rows="2" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+              <label class="block text-xs font-bold text-stone-600 mb-1.5"
+                >Observação</label
+              >
+              <textarea
+                v-model="editForm.obs"
+                rows="2"
+                class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
             </div>
             <p v-if="editError" class="text-red-500 text-xs">{{ editError }}</p>
           </div>
           <div class="flex gap-3 px-5 pb-5">
-            <button @click="editingPayable = null" class="flex-1 border border-stone-200 text-stone-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-stone-50/50">Cancelar</button>
-            <button @click="saveEditPayable" :disabled="editSaving" class="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-bold py-2.5 rounded-lg transition-colors">
-              {{ editSaving ? 'Salvando...' : 'Salvar Alterações' }}
+            <button
+              @click="editingPayable = null"
+              class="flex-1 border border-stone-200 text-stone-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-stone-50/50"
+            >
+              Cancelar
+            </button>
+            <button
+              @click="saveEditPayable"
+              :disabled="editSaving"
+              class="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-bold py-2.5 rounded-lg transition-colors"
+            >
+              {{ editSaving ? "Salvando..." : "Salvar Alterações" }}
             </button>
           </div>
         </div>
@@ -683,79 +1468,186 @@ onMounted(() => {
 
     <!-- Modal Visualizar Conta a Pagar -->
     <Teleport to="body">
-      <div v-if="viewingPayable" class="fixed inset-0 z-[90] flex items-center justify-center p-4" @click.self="viewingPayable = null">
-        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="viewingPayable = null" />
-        <div class="relative glass-strong rounded-2xl w-full max-w-[500px] overflow-hidden">
-          <div class="px-7 py-5 bg-gradient-to-br from-[#1a1f2e] to-[#1e293b] flex items-center justify-between">
+      <div
+        v-if="viewingPayable"
+        class="fixed inset-0 z-[90] flex items-center justify-center p-4"
+        @click.self="viewingPayable = null"
+      >
+        <div
+          class="absolute inset-0 bg-black/50 backdrop-blur-sm"
+          @click="viewingPayable = null"
+        />
+        <div
+          class="relative glass-strong rounded-2xl w-full max-w-[500px] overflow-hidden"
+        >
+          <div
+            class="px-7 py-5 bg-gradient-to-br from-[#1a1f2e] to-[#1e293b] flex items-center justify-between"
+          >
             <div>
-              <h3 class="m-0 text-[15px] font-bold text-white">Detalhes — Conta a Pagar</h3>
-              <p class="mt-0.5 mb-0 text-xs text-slate-400">#{{ viewingPayable.id }} — somente leitura</p>
+              <h3 class="m-0 text-[15px] font-bold text-white">
+                Detalhes — Conta a Pagar
+              </h3>
+              <p class="mt-0.5 mb-0 text-xs text-slate-400">
+                #{{ viewingPayable.id }} — somente leitura
+              </p>
             </div>
-            <button @click="viewingPayable = null" class="text-slate-400 hover:text-white transition-colors">
-              <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            <button
+              @click="viewingPayable = null"
+              class="text-slate-400 hover:text-white transition-colors"
+            >
+              <svg
+                width="18"
+                height="18"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                />
+              </svg>
             </button>
           </div>
           <div class="px-7 py-6 grid grid-cols-2 gap-4">
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Valor</div>
-              <div class="text-2xl font-extrabold text-red-600">R$ {{ fmt(viewingPayable.value) }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Valor
+              </div>
+              <div class="text-2xl font-extrabold text-red-600">
+                R$ {{ fmt(viewingPayable.value) }}
+              </div>
             </div>
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Status
+              </div>
               <span
                 class="inline-flex items-center px-2.5 py-[3px] rounded-full text-[11px] font-semibold"
-                :class="viewingPayable.status === 'pago' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'"
+                :class="
+                  viewingPayable.status === 'pago'
+                    ? 'bg-green-100 text-green-600'
+                    : 'bg-amber-100 text-amber-600'
+                "
               >
-                {{ viewingPayable.status === 'pago' ? '✓ Pago' : '● Pendente' }}
+                {{ viewingPayable.status === "pago" ? "✓ Pago" : "● Pendente" }}
               </span>
             </div>
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Emissão</div>
-              <div class="text-sm font-semibold text-slate-800">{{ fmtDate(viewingPayable.issue_date) }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Emissão
+              </div>
+              <div class="text-sm font-semibold text-slate-800">
+                {{ fmtDate(viewingPayable.issue_date) }}
+              </div>
             </div>
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Vencimento</div>
-              <div class="text-sm font-semibold text-slate-800">{{ fmtDate(viewingPayable.due_date) }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Vencimento
+              </div>
+              <div class="text-sm font-semibold text-slate-800">
+                {{ fmtDate(viewingPayable.due_date) }}
+              </div>
             </div>
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Categoria</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Categoria
+              </div>
               <span
                 v-if="viewingPayable.category"
                 class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold"
-                :style="{ background: catBg[viewingPayable.category] || '#f1f5f9', color: catText[viewingPayable.category] || '#475569' }"
+                :style="{
+                  background: catBg[viewingPayable.category] || '#f1f5f9',
+                  color: catText[viewingPayable.category] || '#475569',
+                }"
               >
-                {{ catLabel[viewingPayable.category] || viewingPayable.category }}
+                {{
+                  catLabel[viewingPayable.category] || viewingPayable.category
+                }}
               </span>
               <span v-else class="text-xs text-slate-400">—</span>
             </div>
             <div class="col-span-2">
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Descrição</div>
-              <div class="text-sm text-slate-800">{{ viewingPayable.description || '—' }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Descrição
+              </div>
+              <div class="text-sm text-slate-800">
+                {{ viewingPayable.description || "—" }}
+              </div>
             </div>
             <div v-if="viewingPayable.document" class="col-span-2">
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Nota Fiscal (nº)</div>
-              <div class="text-sm font-semibold text-purple-700">{{ viewingPayable.document }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Nota Fiscal (nº)
+              </div>
+              <div class="text-sm font-semibold text-purple-700">
+                {{ viewingPayable.document }}
+              </div>
             </div>
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Motorista</div>
-              <div class="text-sm font-semibold text-slate-800">{{ viewingPayable.driver_name || '—' }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Motorista
+              </div>
+              <div class="text-sm font-semibold text-slate-800">
+                {{ viewingPayable.driver_name || "—" }}
+              </div>
             </div>
             <div>
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Placa</div>
-              <div class="text-sm font-mono font-bold text-blue-800">{{ viewingPayable.vehicle_plate || '—' }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Placa
+              </div>
+              <div class="text-sm font-mono font-bold text-blue-800">
+                {{ viewingPayable.vehicle_plate || "—" }}
+              </div>
             </div>
             <div v-if="viewingPayable.supplier_name" class="col-span-2">
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Fornecedor</div>
-              <div class="text-sm text-slate-800">{{ viewingPayable.supplier_name }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Fornecedor
+              </div>
+              <div class="text-sm text-slate-800">
+                {{ viewingPayable.supplier_name }}
+              </div>
             </div>
             <div v-if="viewingPayable.obs" class="col-span-2">
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Observação</div>
-              <div class="text-sm text-stone-600 rounded-lg p-3 bg-stone-50 border border-stone-100">{{ viewingPayable.obs }}</div>
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1"
+              >
+                Observação
+              </div>
+              <div
+                class="text-sm text-stone-600 rounded-lg p-3 bg-stone-50 border border-stone-100"
+              >
+                {{ viewingPayable.obs }}
+              </div>
             </div>
             <!-- Comprovante de pagamento -->
             <div v-if="viewingPayable.receipt_url" class="col-span-2">
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-2">Comprovante de Pagamento</div>
-              <div v-if="isImage(viewingPayable.receipt_url)" class="rounded-lg overflow-hidden border border-stone-200 bg-stone-50">
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-2"
+              >
+                Comprovante de Pagamento
+              </div>
+              <div
+                v-if="isImage(viewingPayable.receipt_url)"
+                class="rounded-lg overflow-hidden border border-stone-200 bg-stone-50"
+              >
                 <img
                   :src="receiptUrl(viewingPayable)"
                   alt="Comprovante"
@@ -769,7 +1661,16 @@ onMounted(() => {
                 target="_blank"
                 class="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors border border-blue-200"
               >
-                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                <svg
+                  width="16"
+                  height="16"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"
+                  />
+                </svg>
                 Ver PDF
               </a>
               <div class="mt-2 flex items-center gap-3">
@@ -778,7 +1679,14 @@ onMounted(() => {
                   :download="'comprovante_' + viewingPayable.id"
                   class="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-semibold"
                 >
-                  <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                  <svg
+                    width="13"
+                    height="13"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+                  </svg>
                   Baixar
                 </a>
                 <button
@@ -791,8 +1699,15 @@ onMounted(() => {
             </div>
             <!-- Nota Fiscal -->
             <div v-if="viewingPayable.invoice_url" class="col-span-2">
-              <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-2">Nota Fiscal</div>
-              <div v-if="isImage(viewingPayable.invoice_url)" class="rounded-lg overflow-hidden border border-purple-200 bg-purple-50/30">
+              <div
+                class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-2"
+              >
+                Nota Fiscal
+              </div>
+              <div
+                v-if="isImage(viewingPayable.invoice_url)"
+                class="rounded-lg overflow-hidden border border-purple-200 bg-purple-50/30"
+              >
                 <img
                   :src="invoiceUrl(viewingPayable)"
                   alt="Nota Fiscal"
@@ -806,7 +1721,16 @@ onMounted(() => {
                 target="_blank"
                 class="inline-flex items-center gap-2 px-4 py-2.5 bg-purple-50 text-purple-700 rounded-lg text-sm font-semibold hover:bg-purple-100 transition-colors border border-purple-200"
               >
-                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                <svg
+                  width="16"
+                  height="16"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"
+                  />
+                </svg>
                 Ver PDF
               </a>
               <div class="mt-2 flex items-center gap-3">
@@ -815,7 +1739,14 @@ onMounted(() => {
                   :download="'nota_fiscal_' + viewingPayable.id"
                   class="inline-flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-800 font-semibold"
                 >
-                  <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                  <svg
+                    width="13"
+                    height="13"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+                  </svg>
                   Baixar
                 </a>
                 <button
@@ -828,7 +1759,12 @@ onMounted(() => {
             </div>
           </div>
           <div class="px-7 py-4 border-t border-stone-100 flex justify-end">
-            <button @click="viewingPayable = null" class="px-5 py-2 bg-stone-100/70 hover:bg-stone-100 text-stone-700 text-sm font-semibold rounded-lg transition-colors">Fechar</button>
+            <button
+              @click="viewingPayable = null"
+              class="px-5 py-2 bg-stone-100/70 hover:bg-stone-100 text-stone-700 text-sm font-semibold rounded-lg transition-colors"
+            >
+              Fechar
+            </button>
           </div>
         </div>
       </div>
